@@ -1,0 +1,52 @@
+[
+    {
+        "id": 1,
+        "title": "Heritage Blue Tea Mug and saucer",
+        "category": "Tea Mugs",
+        "categorySlug": "tea-mugs",
+        "description": "This beautiful tea mug and saucer is from our Heritage Blue collection combined with an ocean blue undertone.",
+        "image": "images/bowl.webp",
+        "price": 2500,
+        "rating": 4.5
+    },
+    {
+        "id": 2,
+        "title": "Royal Pattern Tea Mug",
+        "category": "Tea Mugs",
+        "categorySlug": "tea-mugs",
+        "description": "This beautiful  blue pottery mug is from our royal pattern collection combined with an ocean blue undertone. This mug can be used for serving tea, coffee and any other drink.",
+        "image": "images/bowl.webp",
+        "price": 3500,
+        "rating": 4.7
+    },
+    {
+        "id": 3,
+        "title": "Heritage Blue Jharoka – Planter",
+        "category": "Planters",
+        "categorySlug": "planters",
+        "description": "This handsome piece of decor is large in size and has a unique shape. Beautifully designed for wall hanging.",
+        "image": "images/bowl.webp",
+        "price": 1800,
+        "rating": 4.6
+    },
+    {
+        "id": 4,
+        "title": "Heritage Light Blue Platter – Large",
+        "category": "Plates and Platters",
+        "categorySlug": "plates-platters",
+        "description": "The richly colored glazed piece is hand made by our professional artisans. It features ocean blue under tone and abstract pattern in round shape that gives it an artisan-made professional look. This Heritage light blue platter platter can be used for presenting rice, BBQ, salads, and noodles.",
+        "image": "images/bowl.webp",
+        "price": 4500,
+        "rating": 4.8
+    },
+    {
+        "id": 5,
+        "title": "Blue Celico Med Bowl",
+        "category": "Blue Pottery Bowls",
+        "categorySlug": "blue-pottery-bowls",
+        "description": "Blue Celico Medium Serving Bowl is a serving bowl that features a blue undertone all around and an intricate pattern.",
+        "image": "images/bowl.webp",
+        "price": 6500,
+        "rating": 4.9
+    }
+]
