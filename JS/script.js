@@ -1,10 +1,23 @@
-fetch("products.json")
+fetch("http://localhost:3000/api/products?limit=12")
     .then(response => response.json())
-    .then(products => {
+    .then(data => {
 
         const container = document.getElementById("products-container");
 
-        products.map(product => {
+        // Check if API request was successful
+        if (!data.success) {
+            console.error("Failed to load products");
+            return;
+        }
+
+        data.products.forEach(product => {
+
+            // Get first image from the database
+            let image = "";
+
+            if (product.images) {
+                image = product.images.split(",")[0].trim();
+            }
 
             container.innerHTML += `
 
@@ -12,20 +25,22 @@ fetch("products.json")
 
                     <div class="product-image">
 
-                        <img src="${product.image}" alt="${product.title}">
+                        <img 
+                            src="${image}" 
+                            alt="${product.name}"
+                        >
 
                     </div>
 
                     <div class="product-info">
 
-                        <h5>${product.title}</h5>
+                        <h5>${product.name}</h5>
 
                         <p class="price">
-                            Rs. ${product.price}
-                        </p>
-
-                        <p class="rating">
-                            ⭐ ${product.rating}
+                            ${product.sale_price 
+                                ? `Rs. ${product.sale_price}` 
+                                : `Rs. ${product.regular_price}`
+                            }
                         </p>
 
                         <a href="#" class="btn">
@@ -37,7 +52,6 @@ fetch("products.json")
                 </div>
 
             `;
-
         });
 
     })
