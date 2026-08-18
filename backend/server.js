@@ -7,6 +7,8 @@ app.use(cors({
     origin: "http://127.0.0.1:5500"
 }));
 
+app.use(express.json());
+
 
 const PORT = 3000;
 
@@ -256,6 +258,109 @@ app.get("/api/products/:id", async (req, res) => {
         });
     }
 });
+app.post("/api/orders", async (req, res) => {
+
+    const { customer, items, subtotal, total } = req.body;
+
+    if (!customer || !customer.fullName || !customer.phone || !customer.address) {
+        return res.status(400).json({
+            success: false,
+            message: "Missing required customer details"
+        });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+            success: false,
+            message: "Order has no items"
+        });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        const orderResult = await client.query(
+            `
+            INSERT INTO orders (
+                customer_name,
+                email,
+                phone,
+                address,
+                city,
+                postal_code,
+                notes,
+                subtotal,
+                total,
+                status
+            )
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')
+            RETURNING id
+            `,
+            [
+                customer.fullName,
+                customer.email || null,
+                customer.phone,
+                customer.address,
+                customer.city || null,
+                customer.postalCode || null,
+                customer.notes || null,
+                subtotal || 0,
+                total || subtotal || 0
+            ]
+        );
+
+        const orderId = orderResult.rows[0].id;
+
+        for (const item of items) {
+            await client.query(
+                `
+                INSERT INTO order_items (
+                    order_id,
+                    product_id,
+                    product_name,
+                    price,
+                    quantity
+                )
+                VALUES ($1,$2,$3,$4,$5)
+                `,
+                [
+                    orderId,
+                    item.productId || null,
+                    item.name || "Unknown product",
+                    item.price || 0,
+                    item.quantity || 1
+                ]
+            );
+        }
+
+        await client.query("COMMIT");
+
+        res.json({
+            success: true,
+            orderId: orderId
+        });
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+
+        console.error("Error creating order:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to place order"
+        });
+
+    } finally {
+
+        client.release();
+
+    }
+
+});
+
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });

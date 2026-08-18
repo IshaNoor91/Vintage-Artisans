@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+    <title>Product | Vintage Artisans</title>
+
+</head>
+
+<body>
+
+
+<!-- ==============================
+     HEADER
+================================ -->
+
+<header>
+
+    <nav class="navbar">
+
+        <div class="mobile-menu">
+            <i class="fa-solid fa-bars"></i>
+        </div>
+
+
+        <ul class="nav-links">
+
+            <li>
+                <a href="index.html">
+                    Home
+                </a>
+            </li>
+
+            <li>
+                <a href="shop.html">
+                    Shop
+                </a>
+            </li>
+
+            <li>
+                <a href="#">
+                    Design Family
+                </a>
+            </li>
+
+            <li>
+                <a href="#">
+                    More
+                </a>
+            </li>
+
+        </ul>
+
+
+        <div class="logo">
+
+            <img
+                src="images/Blue & Dark Pink logo.png"
+                alt="Vintage Artisans Logo"
+            >
+
+        </div>
+
+
+        <div class="nav-icons">
+
+            <a href="#">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </a>
+
+            <a href="#">
+                <i class="fa-regular fa-heart"></i>
+            </a>
+
+            <a href="#">
+                <i class="fa-regular fa-user"></i>
+            </a>
+
+           <a href="cart.html">
+    <i class="fa-solid fa-bag-shopping"></i>
+</a>
+
+        </div>
+
+    </nav>
+
+</header>
+
+
+
+<main>
+
+
+<!-- ==============================
+     PRODUCT HERO
+================================ -->
+
+<section class="product-hero">
+
+    <div class="overlay"></div>
+
+    <div class="product-hero-content">
+
+        <h1 id="product-hero-title">
+            Loading...
+        </h1>
+
+
+        <div class="breadcrumb">
+
+            <a href="index.html">
+                HOME
+            </a>
+
+            <span>›</span>
+
+
+            <a href="shop.html">
+                SHOP
+            </a>
+
+            <span>›</span>
+
+
+            <a id="breadcrumb-category"
+               href="#">
+                CATEGORY
+            </a>
+
+            <span>›</span>
+
+
+            <span id="breadcrumb-product">
+                PRODUCT
+            </span>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- ==============================
+     PRODUCT MAIN
+================================ -->
+
+<section class="product-section">
+
+    <div class="product-container">
+
+
+        <!-- LEFT SIDE -->
+
+        <div class="product-gallery">
+
+
+            <div class="product-main-image">
+
+                <img
+                    id="main-product-image"
+                    src="images/bowl.webp"
+                    alt="Product"
+                >
+
+            </div>
+
+
+            <div
+                id="product-thumbnails"
+                class="product-thumbnails">
+            </div>
+
+
+        </div>
+
+
+
+        <!-- RIGHT SIDE -->
+
+        <div class="product-details">
+
+
+            <h1 id="product-title">
+                Loading...
+            </h1>
+
+
+            <div
+                id="product-price"
+                class="product-price">
+                Loading...
+            </div>
+
+
+            <!-- QUANTITY -->
+
+            <div class="quantity-wrapper">
+
+                <button
+                    id="quantity-minus"
+                    type="button">
+                    −
+                </button>
+
+                <input
+                    id="quantity"
+                    type="number"
+                    value="1"
+                    min="1"
+                >
+
+                <button
+                    id="quantity-plus"
+                    type="button">
+                    +
+                </button>
+
+            </div>
+
+
+
+            <!-- BUTTONS -->
+
+            <div class="product-buttons">
+
+                <button
+                    id="add-to-cart"
+                    class="add-cart-btn">
+                    Add to Cart
+                </button>
+
+
+                <button
+                    id="buy-now"
+                    class="buy-now-btn">
+                    Buy Now
+                </button>
+
+            </div>
+
+
+            <hr>
+
+
+            <!-- SHORT DESCRIPTION -->
+
+            <div
+                id="product-short-description"
+                class="product-short-description">
+
+                Loading product description...
+
+            </div>
+
+
+
+            <!-- PRODUCT INFORMATION -->
+
+            <div class="product-meta">
+
+                <p>
+                    <strong>Material:</strong>
+                    <span id="product-material">—</span>
+                </p>
+
+
+                <p>
+                    <strong>Dimensions:</strong>
+                    <span id="product-dimensions">—</span>
+                </p>
+
+
+                <p>
+                    <strong>Category:</strong>
+
+                    <a
+                        id="product-category"
+                        href="#">
+                        —
+                    </a>
+
+                </p>
+
+            </div>
+
+
+
+            <!-- WISHLIST -->
+
+            <button
+                class="wishlist-btn">
+
+                <i class="fa-regular fa-heart"></i>
+
+                Add to Wishlist
+
+            </button>
+
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- ==============================
+     DESCRIPTION / REVIEWS
+================================ -->
+
+<section class="product-content">
+
+    <div class="product-tabs">
+
+        <button class="tab-btn active">
+            DESCRIPTION
+        </button>
+
+        <button class="tab-btn">
+            REVIEWS (<span id="review-count">0</span>)
+        </button>
+
+    </div>
+
+
+    <div
+        id="product-description"
+        class="description-content">
+
+        Loading product description...
+
+    </div>
+
+</section>
+
+
+
+<!-- ==============================
+     YOU MAY ALSO LIKE
+================================ -->
+
+<section class="related-section">
+
+    <div class="container">
+
+        <h2>
+            You may also like...
+        </h2>
+
+
+        <div
+            id="recommended-products"
+            class="related-products">
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- ==============================
+     RELATED PRODUCTS
+================================ -->
+
+<section class="related-section">
+
+    <div class="container">
+
+        <h2>
+            Related products
+        </h2>
+
+
+        <div
+            id="related-products"
+            class="related-products">
+        </div>
+
+    </div>
+
+</section>
+
+
+</main>
+
+
+
+<!-- ==============================
+     FOOTER
+================================ -->
+
+<footer class="footer">
+
+    <div class="footer-container">
+
+        <div>
+            <h3>Shop</h3>
+
+            <a href="#">Camel Skin Lamps</a>
+            <a href="#">Blue Pottery</a>
+            <a href="#">Decor</a>
+        </div>
+
+
+        <div>
+            <h3>Useful Links</h3>
+
+            <a href="#">Terms & Conditions</a>
+            <a href="#">Refund & Return</a>
+            <a href="#">About Us</a>
+            <a href="#">Privacy Policy</a>
+            <a href="#">Contact Us</a>
+        </div>
+
+
+        <div>
+            <h3>Find Us</h3>
+
+            <p>+44 7788 855343</p>
+            <p>contact@thevintageartisans.com</p>
+
+        </div>
+
+
+        <div class="footer-logo">
+
+            <img
+                src="images/Blue & Dark Pink logo.png"
+                alt="Vintage Artisans">
+
+        </div>
+
+    </div>
+
+
+    <div class="footer-bottom">
+
+        <p>
+            Copyright © 2025 – All Rights Reserved.
+        </p>
+
+    </div>
+
+</footer>
+
+
+
+<script src="js/product.js"></script>
+
+</body>
+
+</html>

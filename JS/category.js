@@ -1,5 +1,6 @@
-const params = new URLSearchParams(window.location.search);
+console.log("CATEGORY JS LOADED");
 
+const params = new URLSearchParams(window.location.search);
 const slug = params.get("slug");
 
 const container = document.getElementById("products-container");
@@ -32,6 +33,7 @@ if (!slug) {
             }
 
             return response.json();
+
         })
 
         .then(data => {
@@ -82,7 +84,7 @@ if (!slug) {
 
 
             // ========================================
-            // BREADCRUMB CURRENT CATEGORY
+            // CURRENT CATEGORY IN BREADCRUMB
             // ========================================
 
             breadcrumbCategory.textContent =
@@ -115,9 +117,13 @@ if (!slug) {
 
 
                     breadcrumbParent.innerHTML = `
-                        <a href="category.html?slug=${parentCategory.slug}">
+
+                        <a
+                            href="category.html?slug=${parentCategory.slug}"
+                        >
                             ${parentCategory.name}
                         </a>
+
                     `;
 
                 } else {
@@ -197,7 +203,7 @@ if (!slug) {
 
 
             // ========================================
-            // NO PRODUCTS
+            // CHECK PRODUCTS
             // ========================================
 
             if (
@@ -206,7 +212,11 @@ if (!slug) {
             ) {
 
                 container.innerHTML = `
-                    <p>No products found in this category.</p>
+
+                    <p>
+                        No products found in this category.
+                    </p>
+
                 `;
 
                 return;
@@ -214,21 +224,26 @@ if (!slug) {
             }
 
 
+            console.log(
+                "Products received:",
+                data.products.length
+            );
+
+
             // ========================================
-            // CLEAR CONTAINER
+            // BUILD ALL PRODUCT CARDS
             // ========================================
 
-            container.innerHTML = "";
+            let productsHTML = "";
 
-
-            // ========================================
-            // DISPLAY PRODUCTS
-            // ========================================
 
             data.products.forEach(product => {
 
 
-                // Product image
+                // ========================================
+                // PRODUCT IMAGE
+                // ========================================
+
                 const image = product.images
                     ? product.images
                         .split(",")[0]
@@ -236,139 +251,158 @@ if (!slug) {
                     : "images/bowl.webp";
 
 
-                // Product price
-                const price = product.sale_price
-                    ? `Rs. ${product.sale_price}`
-                    : product.regular_price
-                        ? `Rs. ${product.regular_price}`
-                        : "Price unavailable";
+                // ========================================
+                // SALE CHECK
+                // ========================================
+
+                const hasSale =
+                    product.sale_price &&
+                    product.regular_price &&
+                    Number(product.sale_price)
+                    <
+                    Number(product.regular_price);
 
 
-                // Product card
-         /*      container.innerHTML += `
+                // ========================================
+                // PRICE HTML
+                // ========================================
 
-    <div class="product-card">
+                let priceHTML = "";
 
-        <div class="product-image">
 
-            <img
-                src="${image}"
-                alt="${product.name}"
-            >
+                if (hasSale) {
 
-        </div>
+                    priceHTML = `
 
-        <div class="product-info">
+                        <div class="product-price">
 
-            <h3>
-                ${product.name}
-            </h3>
+                            <span class="sale-price">
+                                Rs. ${product.sale_price}
+                            </span>
 
-            <p class="price">
-                ${price}
-            </p>
+                            <span class="regular-price">
+                                Rs. ${product.regular_price}
+                            </span>
 
-            <a
-                href="#"
-                class="btn"
-            >
-                View Details
-            </a>
+                        </div>
 
-        </div>
+                    `;
 
-    </div>
+                } else {
 
-`; */
-data.products.forEach(product => {
-
-    const image = product.images
-        ? product.images.split(",")[0].trim()
-        : "images/bowl.webp";
-
-    const hasSale =
-        product.sale_price &&
-        product.regular_price &&
-        Number(product.sale_price) < Number(product.regular_price);
-
-    let priceHTML = "";
-
-    if (hasSale) {
-
-        priceHTML = `
-            <div class="product-price">
-                <span class="sale-price">
-                    Rs. ${product.sale_price}
-                </span>
-
-                <span class="regular-price">
-                    Rs. ${product.regular_price}
-                </span>
-            </div>
-        `;
-
-    } else {
-
-        priceHTML = `
-            <div class="product-price">
-                <span class="sale-price">
-                    Rs. ${
+                    const price =
                         product.regular_price ||
                         product.sale_price ||
-                        "Price unavailable"
-                    }
-                </span>
-            </div>
-        `;
-    }
+                        "Price unavailable";
 
 
-    const saleBadge = hasSale
-        ? `<span class="sale-badge">Sale</span>`
-        : "";
+                    priceHTML = `
+
+                        <div class="product-price">
+
+                            <span class="sale-price">
+                                Rs. ${price}
+                            </span>
+
+                        </div>
+
+                    `;
+
+                }
 
 
-    container.innerHTML += `
+                // ========================================
+                // SALE BADGE
+                // ========================================
 
-        <div class="product-card">
+                const saleBadge = hasSale
 
-            <div class="product-image">
+                    ? `
+                        <span class="sale-badge">
+                            Sale
+                        </span>
+                    `
 
-                ${saleBadge}
-
-                <img
-                    src="${image}"
-                    alt="${product.name}"
-                     loading="lazy"
-                     decoding="async"
-                >
-
-            </div>
+                    : "";
 
 
-            <div class="product-info">
+                // ========================================
+                // PRODUCT CARD
+                // ========================================
 
-                <h3>
-                    ${product.name}
-                </h3>
+                productsHTML += `
 
-                ${priceHTML}
+                    <div class="product-card">
 
-                <a
-                    href="product.html?id=${product.id}"
-                    class="btn"
-                >
-                    View Details
-                </a>
 
-            </div>
+                        <div class="product-image">
 
-        </div>
+                            ${saleBadge}
 
-    `;
 
-});
+                            <img
+
+                                src="${image}"
+
+                                alt="${product.name}"
+
+                                loading="lazy"
+
+                                decoding="async"
+
+                            >
+
+                        </div>
+
+
+                        <div class="product-info">
+
+
+                            <h3>
+
+                                ${product.name}
+
+                            </h3>
+
+
+                            ${priceHTML}
+
+
+                            <a
+
+                                href="product.html?id=${product.id}"
+
+                                class="btn"
+
+                            >
+
+                                View Details
+
+                            </a>
+
+
+                        </div>
+
+
+                    </div>
+
+                `;
+
             });
+
+
+            // ========================================
+            // DISPLAY PRODUCTS ONCE
+            // ========================================
+
+            container.innerHTML =
+                productsHTML;
+
+
+            console.log(
+                "Cards rendered:",
+                container.querySelectorAll(".product-card").length
+            );
 
         })
 
@@ -381,7 +415,11 @@ data.products.forEach(product => {
 
 
             container.innerHTML = `
-                <p>Unable to load products.</p>
+
+                <p>
+                    Unable to load products.
+                </p>
+
             `;
 
         });

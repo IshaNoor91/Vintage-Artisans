@@ -20,11 +20,13 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
     >
 
-    <title>Shop | Vintage Artisans</title>
+    <title>Checkout | Vintage Artisans</title>
 
 </head>
 
+
 <body>
+
 
 <header>
 
@@ -33,6 +35,7 @@
         <div class="mobile-menu">
             <i class="fa-solid fa-bars"></i>
         </div>
+
 
         <ul class="nav-links">
 
@@ -43,7 +46,7 @@
             </li>
 
             <li>
-                <a href="shop.html" class="active">
+                <a href="shop.html">
                     Shop
                 </a>
             </li>
@@ -79,9 +82,9 @@
                 <i class="fa-solid fa-magnifying-glass"></i>
             </a>
 
-           <a href="cart.html">
-    <i class="fa-solid fa-bag-shopping"></i>
-</a>
+            <a href="cart.html">
+                <i class="fa-solid fa-bag-shopping"></i>
+            </a>
 
         </div>
 
@@ -90,63 +93,63 @@
 </header>
 
 
+
 <main>
 
 
-    <!-- SHOP HERO -->
+<section class="category-hero">
 
-    <section class="category-hero">
+    <div class="overlay"></div>
 
-        <div class="overlay"></div>
+    <div class="category-hero-content">
 
-        <div class="category-hero-content">
-
-            <h1>
-                Shop
-            </h1>
-
-            <div class="breadcrumb">
-
-                <a href="index.html">
-                    HOME
-                </a>
-
-                <span>›</span>
-
-                <a href="shop.html">
-                    SHOP
-                </a>
-
-            </div>
-
-        </div>
-
-    </section>
+        <h1>
+            Checkout
+        </h1>
 
 
+        <div class="breadcrumb">
 
-    <!-- SHOP PRODUCTS -->
+            <a href="index.html">
+                HOME
+            </a>
 
-    <section class="category-products">
+            <span>›</span>
 
-        <div class="container">
+            <a href="cart.html">
+                CART
+            </a>
 
-            <div
-                id="products-container"
-                class="product-grid"
-            >
-            </div>
+            <span>›</span>
+
+            <span>
+                CHECKOUT
+            </span>
 
         </div>
 
-    </section>
+    </div>
+
+</section>
+
+
+
+<section class="cart-section">
+
+    <div class="container">
+
+        <div id="checkout-container"></div>
+
+    </div>
+
+</section>
 
 
 </main>
 
 
-<script src="js/shop.js"></script>
-<script src="JS/cart-badge.js"></script>
+<script src="js/cart-badge.js"></script>
+<script src="js/checkout.js"></script>
 
 </body>
 
