@@ -24,7 +24,7 @@ if (!slug) {
     // LOAD CATEGORY NAME + BREADCRUMB
     // ========================================
 
-    fetch("http://localhost:3000/api/categories")
+    fetch("https://vintage-artisans-production.up.railway.app/api/categories")
 
         .then(response => {
 
@@ -161,7 +161,7 @@ if (!slug) {
     // ========================================
 
     fetch(
-        `http://localhost:3000/api/products/category/${slug}`
+        `https://vintage-artisans-production.up.railway.app/api/products/category/${slug}`
     )
 
         .then(response => {

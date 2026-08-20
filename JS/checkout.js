@@ -3,7 +3,7 @@ console.log("CHECKOUT JS LOADED");
 
 const CART_KEY = "vintageArtisansCart";
 
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = "https://vintage-artisans-production.up.railway.app/api";
 
 const container = document.getElementById("checkout-container");
 

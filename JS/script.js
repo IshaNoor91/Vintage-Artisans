@@ -1,4 +1,4 @@
-fetch("http://localhost:3000/api/products?limit=12")
+fetch("https://vintage-artisans-production.up.railway.app/api/products?limit=12")
     .then(response => response.json())
     .then(data => {
 

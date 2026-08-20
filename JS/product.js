@@ -5,7 +5,7 @@ console.log("PRODUCT JS LOADED");
 // API
 // ========================================
 
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = "https://vintage-artisans-production.up.railway.app/api";
 
 
 // ========================================

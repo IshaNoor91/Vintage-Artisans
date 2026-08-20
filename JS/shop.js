@@ -1,6 +1,6 @@
 const container = document.getElementById("products-container");
 
-const API_URL = "http://localhost:3000/api/products";
+const API_URL = "https://vintage-artisans-production.up.railway.app/api/products";
 
 const productsPerPage = 24;
 
