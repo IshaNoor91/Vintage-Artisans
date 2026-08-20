@@ -6,9 +6,7 @@ const jwt = require("jsonwebtoken");
 const pool = require("./db");
 
 const app = express();
-app.use(cors({
-    origin: ["http://127.0.0.1:5500", "http://localhost:5173"]
-}));
+app.use(cors());
 
 app.use(express.json());
 
@@ -48,7 +46,7 @@ function requireAdminAuth(req, res, next) {
 }
 
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {
     res.send("Vintage Artisans backend is running!");
@@ -882,5 +880,5 @@ app.patch("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => 
 
 
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
