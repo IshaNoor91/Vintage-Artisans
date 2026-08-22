@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
      <link rel="stylesheet" href="css/style.css">
+     <link rel="stylesheet" href="css/product-filters.css">
     <title>Category | Vintage Artisans</title>
  <link rel="stylesheet"
 href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
@@ -19,13 +20,26 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
      </div>
 
         <ul class="nav-links">
-            <li><a href="index.html" class="active">Home</a></li>
+            <li><a href="index.html">Home</a></li>
 
-            <li><a href="shop.html">Shop</a></li>
+            <li class="nav-item has-dropdown">
+                <a href="shop.html" class="active">Shop</a>
+                <div class="mega-dropdown" id="shop-mega-dropdown"></div>
+            </li>
 
-            <li><a href="#">Design Family</a></li>
+            <li class="nav-item has-dropdown">
+                <a href="#">Design Family</a>
+                <div class="mega-dropdown" id="family-design-dropdown"></div>
+            </li>
 
-            <li><a href="#">More</a></li>
+            <li class="nav-item has-dropdown">
+                <a href="#">More</a>
+                <div class="simple-dropdown">
+                    <a href="about.html">About Us</a>
+                    <a href="blog.html">Blog</a>
+                    <a href="contact.html">Contact Us</a>
+                </div>
+            </li>
         </ul>
 
         <div class="logo">
@@ -43,6 +57,16 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
     </nav>
         
     </header>
+<div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+        <div class="search-box-header">
+            <input type="text" id="search-input" placeholder="Search products or categories...">
+            <button class="search-close-btn" id="search-close" type="button"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="search-results"></div>
+    </div>
+</div>
+
 
     <main>
 
@@ -78,9 +102,72 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
 
 <section class="category-products">
 
-    <div class="container">
+    <div class="shop-layout">
 
-        <div id="products-container" class="product-grid">
+        <!-- ============ FILTER SIDEBAR ============ -->
+        <aside class="filters-sidebar" id="filters-sidebar">
+
+            <button class="filters-close" id="filters-close" aria-label="Close filters">&times;</button>
+
+            <h3 class="filters-title">Filters</h3>
+
+            <div class="filter-group">
+                <h4>Categories</h4>
+                <ul class="filter-category-list" id="category-filter-list">
+                    <!-- populated by category.js -->
+                </ul>
+            </div>
+
+            <div class="filter-group">
+                <h4>Price Range</h4>
+
+                <div class="price-range-inputs">
+                    <input type="number" id="price-min-input" placeholder="Min">
+                    <span>–</span>
+                    <input type="number" id="price-max-input" placeholder="Max">
+                </div>
+
+                <div class="price-slider-group">
+                    <label>Min <span id="price-min-label"></span></label>
+                    <input type="range" id="price-min-slider">
+
+                    <label>Max <span id="price-max-label"></span></label>
+                    <input type="range" id="price-max-slider">
+                </div>
+
+                <button class="btn-apply-price" id="apply-price-btn">Apply</button>
+                <button class="btn-clear-filters" id="clear-filters-btn">Clear All Filters</button>
+            </div>
+
+        </aside>
+
+        <div class="filters-backdrop" id="filters-backdrop"></div>
+
+        <!-- ============ MAIN PRODUCT AREA ============ -->
+        <div class="shop-main">
+
+            <div class="shop-toolbar">
+                <button class="mobile-filter-toggle" id="mobile-filter-toggle">
+                    <i class="fa-solid fa-sliders"></i> Filters
+                </button>
+
+                <div class="shop-toolbar-right">
+                    <span class="results-count" id="results-count"></span>
+
+                    <select class="sort-select" id="sort-select">
+                        <option value="default">Default</option>
+                        <option value="name-asc">Name (A–Z)</option>
+                        <option value="name-desc">Name (Z–A)</option>
+                        <option value="price-asc">Price: Low to High</option>
+                        <option value="price-desc">Price: High to Low</option>
+                        <option value="newest">Newest</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="products-container" class="product-grid">
+            </div>
+
         </div>
 
     </div>
@@ -92,5 +179,65 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
     <script src="js/category.js"></script>
     <script src="JS/cart-badge.js"></script>
 
+<footer class="footer">
+
+    <div class="container">
+
+        <div class="footer-grid">
+
+            <div class="footer-column">
+                <img src="images/Logo 2.0 1 white.png" alt="Vintage Artisans Logo" class="footer-logo">
+                <p>
+                    Vintage Artisans brings handcrafted Multani Blue Pottery
+                    and traditional ceramic art to modern homes with timeless
+                    craftsmanship and elegant designs.
+                </p>
+            </div>
+
+            <div class="footer-column">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="shop.html">Shop</a></li>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                    <li><a href="blog.html">Blog</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h3>Categories</h3>
+                <ul>
+                    <li><a href="all-categories.html">All Categories</a></li>
+                    <li><a href="category.html?slug=blue-pottery-bowls">Bowls</a></li>
+                    <li><a href="category.html?slug=blue-pottery-tea-mugs">Tea Mugs</a></li>
+                    <li><a href="category.html?slug=blue-pottery-tea-sets">Tea Sets</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h3>Contact Us</h3>
+                <p>📞 +92 300 1234567</p>
+                <p>✉ contact@vintageartisans.com</p>
+            </div>
+
+        </div>
+
+        <div class="footer-social">
+            <a href="#"><i class="fa-brands fa-facebook-f"></i></a>
+            <a href="#"><i class="fa-brands fa-instagram"></i></a>
+            <a href="#"><i class="fa-brands fa-pinterest-p"></i></a>
+            <a href="#"><i class="fa-brands fa-youtube"></i></a>
+        </div>
+
+        <div class="footer-bottom">
+            <p>© 2026 Vintage Artisans. All Rights Reserved.</p>
+        </div>
+
+    </div>
+
+</footer>
+
+<script src="js/navbar.js"></script>
 </body>
 </html>

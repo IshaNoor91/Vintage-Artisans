@@ -1,5 +1,7 @@
 console.log("CATEGORY JS LOADED");
 
+const API_BASE = "https://vintage-artisans-production.up.railway.app/api";
+
 const params = new URLSearchParams(window.location.search);
 const slug = params.get("slug");
 
@@ -7,6 +9,37 @@ const container = document.getElementById("products-container");
 const categoryTitle = document.getElementById("category-title");
 const breadcrumbParent = document.getElementById("breadcrumb-parent");
 const breadcrumbCategory = document.getElementById("breadcrumb-category");
+
+// ========================================
+// FILTER / SORT UI ELEMENTS
+// ========================================
+
+const categoryFilterList = document.getElementById("category-filter-list");
+const priceMinInput = document.getElementById("price-min-input");
+const priceMaxInput = document.getElementById("price-max-input");
+const priceMinSlider = document.getElementById("price-min-slider");
+const priceMaxSlider = document.getElementById("price-max-slider");
+const priceMinLabel = document.getElementById("price-min-label");
+const priceMaxLabel = document.getElementById("price-max-label");
+const applyPriceBtn = document.getElementById("apply-price-btn");
+const clearFiltersBtn = document.getElementById("clear-filters-btn");
+const sortSelect = document.getElementById("sort-select");
+const resultsCount = document.getElementById("results-count");
+
+const filtersSidebar = document.getElementById("filters-sidebar");
+const filtersBackdrop = document.getElementById("filters-backdrop");
+const filtersClose = document.getElementById("filters-close");
+const mobileFilterToggle = document.getElementById("mobile-filter-toggle");
+
+// ========================================
+// FILTER STATE
+// ========================================
+
+const filterState = {
+    minPrice: null,
+    maxPrice: null,
+    sort: "default"
+};
 
 
 // ========================================
@@ -21,10 +54,10 @@ if (!slug) {
 
 
     // ========================================
-    // LOAD CATEGORY NAME + BREADCRUMB
+    // LOAD CATEGORY NAME + BREADCRUMB + SIDEBAR LIST
     // ========================================
 
-    fetch("https://vintage-artisans-production.up.railway.app/api/categories")
+    fetch(`${API_BASE}/categories`)
 
         .then(response => {
 
@@ -39,6 +72,13 @@ if (!slug) {
         .then(data => {
 
             console.log("Categories API:", data);
+
+
+            // ========================================
+            // BUILD SIDEBAR CATEGORY LIST
+            // ========================================
+
+            renderCategoryFilterList(data.categories);
 
 
             const category = data.categories.find(
@@ -155,13 +195,109 @@ if (!slug) {
         });
 
 
+    // ========================================
+    // LOAD PRICE RANGE BOUNDS FOR SLIDERS
+    // ========================================
+
+    fetch(`${API_BASE}/products/price-range`)
+
+        .then(response => response.json())
+
+        .then(data => {
+
+            if (!data.success) return;
+
+            const min = Math.floor(data.minPrice);
+            const max = Math.ceil(data.maxPrice);
+
+            [priceMinSlider, priceMaxSlider].forEach(slider => {
+                slider.min = min;
+                slider.max = max;
+            });
+
+            priceMinSlider.value = min;
+            priceMaxSlider.value = max;
+
+            priceMinInput.placeholder = `Rs. ${min}`;
+            priceMaxInput.placeholder = `Rs. ${max}`;
+
+            priceMinLabel.textContent = `Rs. ${min}`;
+            priceMaxLabel.textContent = `Rs. ${max}`;
+
+        })
+
+        .catch(error => {
+            console.error("PRICE RANGE API ERROR:", error);
+        });
+
 
     // ========================================
-    // LOAD CATEGORY PRODUCTS
+    // INITIAL PRODUCTS LOAD
     // ========================================
+
+    loadCategoryProducts();
+
+}
+
+
+// ========================================
+// BUILD SIDEBAR CATEGORY LIST
+// (clicking a category navigates to that category page)
+// ========================================
+
+function renderCategoryFilterList(categories) {
+
+    if (!categoryFilterList) return;
+
+    categoryFilterList.innerHTML = "";
+
+    categories.forEach(cat => {
+
+        const li = document.createElement("li");
+
+        const button = document.createElement("button");
+        button.textContent = cat.name;
+
+        if (cat.slug === slug) {
+            button.classList.add("active");
+        }
+
+        button.addEventListener("click", () => {
+            window.location.href = `category.html?slug=${cat.slug}`;
+        });
+
+        li.appendChild(button);
+        categoryFilterList.appendChild(li);
+
+    });
+
+}
+
+
+// ========================================
+// LOAD CATEGORY PRODUCTS (with filters/sort)
+// ========================================
+
+function loadCategoryProducts() {
+
+    container.innerHTML = `<p>Loading products...</p>`;
+
+    const query = new URLSearchParams();
+
+    if (filterState.minPrice !== null) {
+        query.set("minPrice", filterState.minPrice);
+    }
+
+    if (filterState.maxPrice !== null) {
+        query.set("maxPrice", filterState.maxPrice);
+    }
+
+    if (filterState.sort && filterState.sort !== "default") {
+        query.set("sort", filterState.sort);
+    }
 
     fetch(
-        `https://vintage-artisans-production.up.railway.app/api/products/category/${slug}`
+        `${API_BASE}/products/category/${slug}?${query.toString()}`
     )
 
         .then(response => {
@@ -214,10 +350,14 @@ if (!slug) {
                 container.innerHTML = `
 
                     <p>
-                        No products found in this category.
+                        No products found for these filters.
                     </p>
 
                 `;
+
+                if (resultsCount) {
+                    resultsCount.textContent = "0 results";
+                }
 
                 return;
 
@@ -228,6 +368,11 @@ if (!slug) {
                 "Products received:",
                 data.products.length
             );
+
+            if (resultsCount) {
+                resultsCount.textContent =
+                    `${data.products.length} result${data.products.length === 1 ? "" : "s"}`;
+            }
 
 
             // ========================================
@@ -424,4 +569,149 @@ if (!slug) {
 
         });
 
+}
+
+
+// ========================================
+// SORT DROPDOWN
+// ========================================
+
+if (sortSelect) {
+
+    sortSelect.addEventListener("change", (e) => {
+        filterState.sort = e.target.value;
+        loadCategoryProducts();
+    });
+
+}
+
+
+// ========================================
+// PRICE RANGE — sync sliders <-> number inputs
+// ========================================
+
+if (priceMinSlider && priceMaxSlider) {
+
+    priceMinSlider.addEventListener("input", () => {
+
+        if (Number(priceMinSlider.value) > Number(priceMaxSlider.value)) {
+            priceMinSlider.value = priceMaxSlider.value;
+        }
+
+        priceMinLabel.textContent = `Rs. ${priceMinSlider.value}`;
+        priceMinInput.value = priceMinSlider.value;
+
+    });
+
+    priceMaxSlider.addEventListener("input", () => {
+
+        if (Number(priceMaxSlider.value) < Number(priceMinSlider.value)) {
+            priceMaxSlider.value = priceMinSlider.value;
+        }
+
+        priceMaxLabel.textContent = `Rs. ${priceMaxSlider.value}`;
+        priceMaxInput.value = priceMaxSlider.value;
+
+    });
+
+}
+
+if (priceMinInput && priceMaxInput) {
+
+    priceMinInput.addEventListener("input", () => {
+        if (priceMinInput.value !== "") {
+            priceMinSlider.value = priceMinInput.value;
+            priceMinLabel.textContent = `Rs. ${priceMinInput.value}`;
+        }
+    });
+
+    priceMaxInput.addEventListener("input", () => {
+        if (priceMaxInput.value !== "") {
+            priceMaxSlider.value = priceMaxInput.value;
+            priceMaxLabel.textContent = `Rs. ${priceMaxInput.value}`;
+        }
+    });
+
+}
+
+
+// ========================================
+// APPLY PRICE FILTER
+// ========================================
+
+if (applyPriceBtn) {
+
+    applyPriceBtn.addEventListener("click", () => {
+
+        const min = priceMinInput.value !== "" ? Number(priceMinInput.value) : Number(priceMinSlider.value);
+        const max = priceMaxInput.value !== "" ? Number(priceMaxInput.value) : Number(priceMaxSlider.value);
+
+        filterState.minPrice = min;
+        filterState.maxPrice = max;
+
+        loadCategoryProducts();
+        closeMobileFilters();
+
+    });
+
+}
+
+
+// ========================================
+// CLEAR ALL FILTERS
+// ========================================
+
+if (clearFiltersBtn) {
+
+    clearFiltersBtn.addEventListener("click", () => {
+
+        filterState.minPrice = null;
+        filterState.maxPrice = null;
+        filterState.sort = "default";
+
+        priceMinInput.value = "";
+        priceMaxInput.value = "";
+
+        if (priceMinSlider && priceMaxSlider) {
+            priceMinSlider.value = priceMinSlider.min;
+            priceMaxSlider.value = priceMaxSlider.max;
+            priceMinLabel.textContent = `Rs. ${priceMinSlider.min}`;
+            priceMaxLabel.textContent = `Rs. ${priceMaxSlider.max}`;
+        }
+
+        if (sortSelect) sortSelect.value = "default";
+
+        loadCategoryProducts();
+        closeMobileFilters();
+
+    });
+
+}
+
+
+// ========================================
+// MOBILE FILTER DRAWER
+// ========================================
+
+function openMobileFilters() {
+    filtersSidebar.classList.add("open");
+    filtersBackdrop.classList.add("open");
+}
+
+function closeMobileFilters() {
+    if (!filtersSidebar) return;
+    filtersSidebar.classList.remove("open");
+    filtersBackdrop.classList.remove("open");
+}
+
+if (mobileFilterToggle) {
+    mobileFilterToggle.addEventListener("click", openMobileFilters);
+}
+
+if (filtersClose) {
+    filtersClose.addEventListener("click", closeMobileFilters);
+}
+
+if (filtersBackdrop) {
+    filtersBackdrop.addEventListener("click", closeMobileFilters);
 }

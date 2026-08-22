@@ -9,9 +9,8 @@ app.use(cors({
     origin: [
         "http://127.0.0.1:5500",
         "http://localhost:5173",
-        "https://cozy-trifle-37f6b4.netlify.app",
-        "https://vintage-artisans.netlify.app"
-    ], credentials: true
+        "https://cozy-trifle-37f6b4.netlify.app"
+    ]
 }));
 
 app.use(express.json());
@@ -81,36 +80,91 @@ app.get("/api/products", async (req, res) => {
     try {
         const page = parseInt(req.query.page, 10) || 1;
         const limit = parseInt(req.query.limit, 10) || 24;
-
         const offset = (page - 1) * limit;
 
-        const productsResult = await pool.query(`
-            SELECT
-                id,
-                name,
-                product_type,
-                short_description,
-                description,
-                regular_price,
-                sale_price,
-                stock,
-                in_stock,
-                images,
-                tags,
-                published,
-                featured
-            FROM products
-            WHERE published = true
-            ORDER BY id
-            LIMIT $1
-            OFFSET $2
-        `, [limit, offset]);
+        // ========================================
+        // FILTER / SORT PARAMS
+        // category: category slug (optional)
+        // minPrice / maxPrice: numeric range (optional)
+        // sort: name-asc | name-desc | price-asc | price-desc | newest | default
+        // ========================================
+        const category = req.query.category || null;
+        const minPrice = req.query.minPrice !== undefined ? parseFloat(req.query.minPrice) : null;
+        const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
+        const sort = req.query.sort || "default";
 
-        const countResult = await pool.query(`
-            SELECT COUNT(*) AS total
-            FROM products
-            WHERE published = true
-        `);
+        let joinClause = "";
+        const whereConditions = ["p.published = true"];
+        const params = [];
+        let paramIndex = 1;
+
+        if (category) {
+            joinClause = `
+                JOIN product_categories pc ON p.id = pc.product_id
+                JOIN categories c ON pc.category_id = c.id
+            `;
+            whereConditions.push(`c.slug = $${paramIndex}`);
+            params.push(category);
+            paramIndex++;
+        }
+
+        if (minPrice !== null && !Number.isNaN(minPrice)) {
+            whereConditions.push(`COALESCE(p.sale_price, p.regular_price) >= $${paramIndex}`);
+            params.push(minPrice);
+            paramIndex++;
+        }
+
+        if (maxPrice !== null && !Number.isNaN(maxPrice)) {
+            whereConditions.push(`COALESCE(p.sale_price, p.regular_price) <= $${paramIndex}`);
+            params.push(maxPrice);
+            paramIndex++;
+        }
+
+        const whereClause = whereConditions.join(" AND ");
+
+        let orderBy = "p.id ASC";
+        switch (sort) {
+            case "price-asc": orderBy = "effective_price ASC"; break;
+            case "price-desc": orderBy = "effective_price DESC"; break;
+            case "name-asc": orderBy = "p.name ASC"; break;
+            case "name-desc": orderBy = "p.name DESC"; break;
+            case "newest": orderBy = "p.id DESC"; break;
+            default: orderBy = "p.id ASC";
+        }
+
+        const productsQuery = `
+            SELECT DISTINCT
+                p.id,
+                p.name,
+                p.product_type,
+                p.short_description,
+                p.description,
+                p.regular_price,
+                p.sale_price,
+                p.stock,
+                p.in_stock,
+                p.images,
+                p.tags,
+                p.published,
+                p.featured,
+                COALESCE(p.sale_price, p.regular_price) AS effective_price
+            FROM products p
+            ${joinClause}
+            WHERE ${whereClause}
+            ORDER BY ${orderBy}
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+
+        const productsParams = [...params, limit, offset];
+        const productsResult = await pool.query(productsQuery, productsParams);
+
+        const countQuery = `
+            SELECT COUNT(DISTINCT p.id) AS total
+            FROM products p
+            ${joinClause}
+            WHERE ${whereClause}
+        `;
+        const countResult = await pool.query(countQuery, params);
 
         const total = parseInt(countResult.rows[0].total, 10);
 
@@ -135,6 +189,39 @@ app.get("/api/products", async (req, res) => {
     try {
         const { slug } = req.params;
 
+        // ========================================
+        // FILTER / SORT PARAMS
+        // ========================================
+        const minPrice = req.query.minPrice !== undefined ? parseFloat(req.query.minPrice) : null;
+        const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
+        const sort = req.query.sort || "default";
+
+        const whereConditions = ["c.slug = $1", "p.published = true"];
+        const params = [slug];
+        let paramIndex = 2;
+
+        if (minPrice !== null && !Number.isNaN(minPrice)) {
+            whereConditions.push(`COALESCE(p.sale_price, p.regular_price) >= $${paramIndex}`);
+            params.push(minPrice);
+            paramIndex++;
+        }
+
+        if (maxPrice !== null && !Number.isNaN(maxPrice)) {
+            whereConditions.push(`COALESCE(p.sale_price, p.regular_price) <= $${paramIndex}`);
+            params.push(maxPrice);
+            paramIndex++;
+        }
+
+        let orderBy = "p.id ASC";
+        switch (sort) {
+            case "price-asc": orderBy = "effective_price ASC"; break;
+            case "price-desc": orderBy = "effective_price DESC"; break;
+            case "name-asc": orderBy = "p.name ASC"; break;
+            case "name-desc": orderBy = "p.name DESC"; break;
+            case "newest": orderBy = "p.id DESC"; break;
+            default: orderBy = "p.id ASC";
+        }
+
         const result = await pool.query(
     `
     SELECT DISTINCT
@@ -147,17 +234,17 @@ app.get("/api/products", async (req, res) => {
         p.images,
         p.in_stock,
         p.featured,
-        c.name AS category_name
+        c.name AS category_name,
+        COALESCE(p.sale_price, p.regular_price) AS effective_price
     FROM products p
     JOIN product_categories pc
         ON p.id = pc.product_id
     JOIN categories c
         ON pc.category_id = c.id
-    WHERE c.slug = $1
-    AND p.published = true
-    ORDER BY p.id
+    WHERE ${whereConditions.join(" AND ")}
+    ORDER BY ${orderBy}
     `,
-    [slug]
+    params
 );
        res.json({
     success: true,
@@ -202,6 +289,32 @@ app.get("/api/categories", async (req, res) => {
         });
     }
 });
+app.get("/api/products/price-range", async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                MIN(COALESCE(sale_price, regular_price)) AS min_price,
+                MAX(COALESCE(sale_price, regular_price)) AS max_price
+            FROM products
+            WHERE published = true
+        `);
+
+        res.json({
+            success: true,
+            minPrice: Number(result.rows[0].min_price) || 0,
+            maxPrice: Number(result.rows[0].max_price) || 0
+        });
+
+    } catch (error) {
+        console.error("Error fetching price range:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch price range"
+        });
+    }
+});
+
 app.get("/api/products/:id", async (req, res) => {
     try {
         const productId = req.params.id;
@@ -884,6 +997,79 @@ app.patch("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => 
 
 });
 
+
+app.get("/api/search", async (req, res) => {
+
+    try {
+        const q = (req.query.q || "").trim();
+
+        if (!q) {
+            return res.json({ success: true, products: [], categories: [] });
+        }
+
+        const like = `%${q}%`;
+
+        const productsResult = await pool.query(
+            `
+            SELECT id, name, regular_price, sale_price, images
+            FROM products
+            WHERE published = true
+            AND name ILIKE $1
+            ORDER BY name
+            LIMIT 8
+            `,
+            [like]
+        );
+
+        const categoriesResult = await pool.query(
+            `
+            SELECT id, name, slug
+            FROM categories
+            WHERE name ILIKE $1
+            ORDER BY name
+            LIMIT 8
+            `,
+            [like]
+        );
+
+        res.json({
+            success: true,
+            products: productsResult.rows,
+            categories: categoriesResult.rows
+        });
+
+    } catch (error) {
+        console.error("Error searching:", error);
+        res.status(500).json({ success: false, message: "Search failed" });
+    }
+
+});
+
+app.post("/api/contact", async (req, res) => {
+
+    try {
+        const { name, email, message } = req.body;
+
+        if (!name || !email || !message) {
+            return res.status(400).json({
+                success: false,
+                message: "Name, email, and message are required"
+            });
+        }
+
+        await pool.query(
+            `INSERT INTO contact_messages (name, email, message) VALUES ($1, $2, $3)`,
+            [name, email, message]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error saving contact message:", error);
+        res.status(500).json({ success: false, message: "Failed to send message" });
+    }
+
+});
 
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

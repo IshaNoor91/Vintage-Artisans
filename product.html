@@ -34,31 +34,26 @@
 
 
         <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
 
-            <li>
-                <a href="index.html">
-                    Home
-                </a>
+            <li class="nav-item has-dropdown">
+                <a href="shop.html" class="active">Shop</a>
+                <div class="mega-dropdown" id="shop-mega-dropdown"></div>
             </li>
 
-            <li>
-                <a href="shop.html">
-                    Shop
-                </a>
+            <li class="nav-item has-dropdown">
+                <a href="#">Design Family</a>
+                <div class="mega-dropdown" id="family-design-dropdown"></div>
             </li>
 
-            <li>
-                <a href="#">
-                    Design Family
-                </a>
+            <li class="nav-item has-dropdown">
+                <a href="#">More</a>
+                <div class="simple-dropdown">
+                    <a href="about.html">About Us</a>
+                    <a href="blog.html">Blog</a>
+                    <a href="contact.html">Contact Us</a>
+                </div>
             </li>
-
-            <li>
-                <a href="#">
-                    More
-                </a>
-            </li>
-
         </ul>
 
 
@@ -95,6 +90,16 @@
     </nav>
 
 </header>
+<div class="search-overlay" id="search-overlay">
+    <div class="search-box">
+        <div class="search-box-header">
+            <input type="text" id="search-input" placeholder="Search products or categories...">
+            <button class="search-close-btn" id="search-close" type="button"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="search-results"></div>
+    </div>
+</div>
+
 
 
 
@@ -405,53 +410,58 @@
 
 <footer class="footer">
 
-    <div class="footer-container">
+    <div class="container">
 
-        <div>
-            <h3>Shop</h3>
+        <div class="footer-grid">
 
-            <a href="#">Camel Skin Lamps</a>
-            <a href="#">Blue Pottery</a>
-            <a href="#">Decor</a>
+            <div class="footer-column">
+                <img src="images/Logo 2.0 1 white.png" alt="Vintage Artisans Logo" class="footer-logo">
+                <p>
+                    Vintage Artisans brings handcrafted Multani Blue Pottery
+                    and traditional ceramic art to modern homes with timeless
+                    craftsmanship and elegant designs.
+                </p>
+            </div>
+
+            <div class="footer-column">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="shop.html">Shop</a></li>
+                    <li><a href="about.html">About Us</a></li>
+                    <li><a href="contact.html">Contact Us</a></li>
+                    <li><a href="blog.html">Blog</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h3>Categories</h3>
+                <ul>
+                    <li><a href="all-categories.html">All Categories</a></li>
+                    <li><a href="category.html?slug=blue-pottery-bowls">Bowls</a></li>
+                    <li><a href="category.html?slug=blue-pottery-tea-mugs">Tea Mugs</a></li>
+                    <li><a href="category.html?slug=blue-pottery-tea-sets">Tea Sets</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h3>Contact Us</h3>
+                <p>📞 +92 300 1234567</p>
+                <p>✉ contact@vintageartisans.com</p>
+            </div>
+
         </div>
 
-
-        <div>
-            <h3>Useful Links</h3>
-
-            <a href="#">Terms & Conditions</a>
-            <a href="#">Refund & Return</a>
-            <a href="#">About Us</a>
-            <a href="#">Privacy Policy</a>
-            <a href="#">Contact Us</a>
+        <div class="footer-social">
+            <a href="#"><i class="fa-brands fa-facebook-f"></i></a>
+            <a href="#"><i class="fa-brands fa-instagram"></i></a>
+            <a href="#"><i class="fa-brands fa-pinterest-p"></i></a>
+            <a href="#"><i class="fa-brands fa-youtube"></i></a>
         </div>
 
-
-        <div>
-            <h3>Find Us</h3>
-
-            <p>+44 7788 855343</p>
-            <p>contact@thevintageartisans.com</p>
-
+        <div class="footer-bottom">
+            <p>© 2026 Vintage Artisans. All Rights Reserved.</p>
         </div>
-
-
-        <div class="footer-logo">
-
-            <img
-                src="images/Blue & Dark Pink logo.png"
-                alt="Vintage Artisans">
-
-        </div>
-
-    </div>
-
-
-    <div class="footer-bottom">
-
-        <p>
-            Copyright © 2025 – All Rights Reserved.
-        </p>
 
     </div>
 
@@ -461,6 +471,7 @@
 
 <script src="js/product.js"></script>
 
+<script src="js/navbar.js"></script>
 </body>
 
 </html>

@@ -1,57 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <link
-        rel="stylesheet"
-        href="css/style.css"
-    >
-
-    <link
-        rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
-    >
-
-    <title>Checkout | Vintage Artisans</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog | Vintage Artisans</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
-
-
 <body>
 
-
 <header>
-
     <nav class="navbar">
-
-        <div class="mobile-menu">
-            <i class="fa-solid fa-bars"></i>
-        </div>
-
+        <div class="mobile-menu"><i class="fa-solid fa-bars"></i></div>
 
         <ul class="nav-links">
             <li><a href="index.html">Home</a></li>
-
             <li class="nav-item has-dropdown">
                 <a href="shop.html">Shop</a>
                 <div class="mega-dropdown" id="shop-mega-dropdown"></div>
             </li>
-
             <li class="nav-item has-dropdown">
                 <a href="#">Design Family</a>
                 <div class="mega-dropdown" id="family-design-dropdown"></div>
             </li>
-
             <li class="nav-item has-dropdown">
-                <a href="#">More</a>
+                <a href="#" class="active">More</a>
                 <div class="simple-dropdown">
                     <a href="about.html">About Us</a>
                     <a href="blog.html">Blog</a>
@@ -60,32 +33,17 @@
             </li>
         </ul>
 
-
         <div class="logo">
-
-            <img
-                src="images/Blue & Dark Pink logo.png"
-                alt="Vintage Artisans Logo"
-            >
-
+            <img src="images/Blue & Dark Pink logo.png" alt="Vintage Artisans Logo">
         </div>
-
 
         <div class="nav-icons">
-
-            <a href="#">
-                <i class="fa-solid fa-magnifying-glass"></i>
-            </a>
-
-            <a href="cart.html">
-                <i class="fa-solid fa-bag-shopping"></i>
-            </a>
-
+            <a href="#" id="search-toggle"><i class="fa-solid fa-magnifying-glass"></i></a>
+            <a href="cart.html"><i class="fa-solid fa-bag-shopping"></i></a>
         </div>
-
     </nav>
-
 </header>
+
 <div class="search-overlay" id="search-overlay">
     <div class="search-box">
         <div class="search-box-header">
@@ -96,65 +54,20 @@
     </div>
 </div>
 
-
-
-
 <main>
-
-
-<section class="category-hero">
-
-    <div class="overlay"></div>
-
-    <div class="category-hero-content">
-
-        <h1>
-            Checkout
-        </h1>
-
-
+    <section class="info-page-hero">
+        <h1>Blog</h1>
         <div class="breadcrumb">
-
-            <a href="index.html">
-                HOME
-            </a>
-
-            <span>›</span>
-
-            <a href="cart.html">
-                CART
-            </a>
-
-            <span>›</span>
-
-            <span>
-                CHECKOUT
-            </span>
-
+            <a href="index.html">HOME</a> <span>›</span> <span>BLOG</span>
         </div>
+    </section>
 
-    </div>
-
-</section>
-
-
-
-<section class="cart-section">
-
-    <div class="container">
-
-        <div id="checkout-container"></div>
-
-    </div>
-
-</section>
-
-
+    <section class="story-block" style="text-align:center; padding-top:60px; padding-bottom:80px;">
+        <h2>Stories from the Studio</h2>
+        <p>We're working on our first posts about artisan craftsmanship, pottery techniques, and the people behind every piece. Check back soon.</p>
+        <a href="shop.html" class="hero-btn">Browse the Shop Instead</a>
+    </section>
 </main>
-
-
-<script src="js/cart-badge.js"></script>
-<script src="js/checkout.js"></script>
 
 <footer class="footer">
 
@@ -217,5 +130,4 @@
 
 <script src="js/navbar.js"></script>
 </body>
-
 </html>

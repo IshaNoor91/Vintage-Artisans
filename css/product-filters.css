@@ -1,0 +1,254 @@
+/* ==========================================================
+   PRODUCT FILTERS — sidebar, toolbar, mobile drawer
+   Add this file to both shop.html and category.html:
+   <link rel="stylesheet" href="css/product-filters.css">
+   ========================================================== */
+
+:root {
+  --pf-border: #e3e1db;
+  --pf-ink: #222;
+  --pf-muted: #767676;
+  --pf-accent: #2f6f4f;
+  --pf-bg: #ffffff;
+  --pf-radius: 8px;
+}
+
+/* ----- Layout: sidebar + main content ----- */
+.shop-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.shop-main {
+  flex: 1;
+  min-width: 0; /* allow grid to shrink properly */
+}
+
+/* ----- Sidebar ----- */
+.filters-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--pf-bg);
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  padding: 18px;
+  position: sticky;
+  top: 16px;
+}
+
+.filters-sidebar h3.filters-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.filter-group {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--pf-border);
+}
+
+.filter-group:last-of-type {
+  border-bottom: none;
+  margin-bottom: 8px;
+}
+
+.filter-group h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pf-muted);
+}
+
+/* category list */
+.filter-category-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-category-list button {
+  all: unset;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--pf-ink);
+  padding: 6px 8px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.filter-category-list button:hover {
+  background: #f2f1ec;
+}
+
+.filter-category-list button.active {
+  background: var(--pf-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* price range */
+.price-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.price-range-inputs input[type="number"] {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--pf-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.price-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.price-slider-group label {
+  font-size: 12px;
+  color: var(--pf-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.price-slider-group input[type="range"] {
+  width: 100%;
+  accent-color: var(--pf-accent);
+}
+
+.btn-apply-price,
+.btn-clear-filters {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--pf-accent);
+  background: var(--pf-accent);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-clear-filters {
+  background: transparent;
+  color: var(--pf-accent);
+  margin-top: 4px;
+}
+
+.btn-apply-price:hover { opacity: 0.9; }
+.btn-clear-filters:hover { background: #f2f1ec; }
+
+/* ----- Toolbar (sort + mobile toggle + count) ----- */
+.shop-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.shop-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.results-count {
+  font-size: 13px;
+  color: var(--pf-muted);
+}
+
+.sort-select {
+  padding: 8px 10px;
+  border: 1px solid var(--pf-border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.mobile-filter-toggle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--pf-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ----- Mobile responsive ----- */
+.filters-close {
+  display: none;
+}
+
+.filters-backdrop {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .shop-layout {
+    flex-direction: column;
+  }
+
+  .mobile-filter-toggle {
+    display: inline-flex;
+  }
+
+  .filters-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 82%;
+    max-width: 320px;
+    z-index: 1001;
+    border-radius: 0;
+    overflow-y: auto;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+  }
+
+  .filters-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .filters-close {
+    display: block;
+    all: unset;
+    cursor: pointer;
+    font-size: 22px;
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    color: var(--pf-muted);
+  }
+
+  .filters-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+  }
+
+  .filters-backdrop.open {
+    display: block;
+  }
+}
