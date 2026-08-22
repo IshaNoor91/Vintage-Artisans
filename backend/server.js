@@ -4,6 +4,15 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
 
+// ========================================
+// STRIPE
+// Uses a placeholder key until you set STRIPE_SECRET_KEY in your
+// environment (Railway → Variables). Needs `npm install stripe`.
+// ========================================
+const stripe = require("stripe")(
+    process.env.STRIPE_SECRET_KEY || "sk_test_REPLACE_WITH_YOUR_SECRET_KEY"
+);
+
 const app = express();
 app.use(cors({
     origin: [
@@ -92,6 +101,7 @@ app.get("/api/products", async (req, res) => {
         const minPrice = req.query.minPrice !== undefined ? parseFloat(req.query.minPrice) : null;
         const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
         const sort = req.query.sort || "default";
+        const search = req.query.search ? req.query.search.trim() : null;
 
         let joinClause = "";
         const whereConditions = ["p.published = true"];
@@ -105,6 +115,12 @@ app.get("/api/products", async (req, res) => {
             `;
             whereConditions.push(`c.slug = $${paramIndex}`);
             params.push(category);
+            paramIndex++;
+        }
+
+        if (search) {
+            whereConditions.push(`(p.name ILIKE $${paramIndex} OR p.short_description ILIKE $${paramIndex})`);
+            params.push(`%${search}%`);
             paramIndex++;
         }
 
@@ -263,6 +279,69 @@ app.get("/api/products", async (req, res) => {
         });
     }
 });
+// ========================================
+// SEARCH — used by the header search dropdown (navbar.js)
+// Returns a small set of matching products AND categories
+// ========================================
+
+app.get("/api/search", async (req, res) => {
+    try {
+        const q = req.query.q ? req.query.q.trim() : "";
+
+        if (!q) {
+            return res.json({
+                success: true,
+                products: [],
+                categories: []
+            });
+        }
+
+        const likeTerm = `%${q}%`;
+
+        const productsResult = await pool.query(
+            `
+            SELECT
+                id,
+                name,
+                regular_price,
+                sale_price,
+                images
+            FROM products
+            WHERE published = true
+              AND (name ILIKE $1 OR short_description ILIKE $1)
+            ORDER BY name ASC
+            LIMIT 6
+            `,
+            [likeTerm]
+        );
+
+        const categoriesResult = await pool.query(
+            `
+            SELECT id, name, slug
+            FROM categories
+            WHERE name ILIKE $1
+            ORDER BY name ASC
+            LIMIT 5
+            `,
+            [likeTerm]
+        );
+
+        res.json({
+            success: true,
+            products: productsResult.rows,
+            categories: categoriesResult.rows
+        });
+
+    } catch (error) {
+        console.error("Error in /api/search:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Search failed"
+        });
+    }
+});
+
 app.get("/api/categories", async (req, res) => {
     try {
         const result = await pool.query(`
@@ -413,9 +492,51 @@ app.get("/api/products/:id", async (req, res) => {
         });
     }
 });
+// ========================================
+// STRIPE — create a PaymentIntent for checkout
+// NOTE: Stripe does not support merchant accounts registered in
+// Pakistan directly (as of 2026). You'll need a Stripe account
+// registered in a supported country before this can go live.
+// Set STRIPE_CURRENCY in your environment once you know which
+// currency your Stripe account will settle in (defaults to usd).
+// ========================================
+
+app.post("/api/create-payment-intent", async (req, res) => {
+    try {
+        const amount = Number(req.body.amount);
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid amount"
+            });
+        }
+
+        const currency = process.env.STRIPE_CURRENCY || "usd";
+
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: Math.round(amount * 100), // smallest currency unit
+            currency: currency
+        });
+
+        res.json({
+            success: true,
+            clientSecret: paymentIntent.client_secret
+        });
+
+    } catch (error) {
+        console.error("Error creating payment intent:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not start payment"
+        });
+    }
+});
+
 app.post("/api/orders", async (req, res) => {
 
-    const { customer, items, subtotal, total } = req.body;
+    const { customer, items, subtotal, total, paymentMethod, paymentReference } = req.body;
 
     if (!customer || !customer.fullName || !customer.phone || !customer.address) {
         return res.status(400).json({
@@ -429,6 +550,50 @@ app.post("/api/orders", async (req, res) => {
             success: false,
             message: "Order has no items"
         });
+    }
+
+    // ========================================
+    // PAYMENT METHOD
+    // ========================================
+
+    const allowedMethods = ["cod", "stripe", "bank_transfer"];
+    const method = allowedMethods.includes(paymentMethod) ? paymentMethod : "cod";
+
+    let orderStatus = "pending";
+
+    if (method === "stripe") {
+
+        if (!paymentReference) {
+            return res.status(400).json({
+                success: false,
+                message: "Missing payment confirmation"
+            });
+        }
+
+        try {
+
+            const intent = await stripe.paymentIntents.retrieve(paymentReference);
+
+            if (intent.status !== "succeeded") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Payment not completed"
+                });
+            }
+
+            orderStatus = "paid";
+
+        } catch (error) {
+
+            console.error("Error verifying Stripe payment:", error);
+
+            return res.status(400).json({
+                success: false,
+                message: "Could not verify payment"
+            });
+
+        }
+
     }
 
     const client = await pool.connect();
@@ -448,9 +613,11 @@ app.post("/api/orders", async (req, res) => {
                 notes,
                 subtotal,
                 total,
+                payment_method,
+                payment_reference,
                 status
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
             RETURNING id
             `,
             [
@@ -462,7 +629,10 @@ app.post("/api/orders", async (req, res) => {
                 customer.postalCode || null,
                 customer.notes || null,
                 subtotal || 0,
-                total || subtotal || 0
+                total || subtotal || 0,
+                method,
+                paymentReference || null,
+                orderStatus
             ]
         );
 

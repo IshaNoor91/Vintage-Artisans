@@ -2523,8 +2523,7 @@ color:var(--heading-color);
     display: none;
     position: absolute;
     top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;                 /* was: left:50%; transform:translateX(-50%) — that centered on the (narrow) trigger link and pushed it off-screen */
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
@@ -2533,6 +2532,8 @@ color:var(--heading-color);
     gap: 32px;
     z-index: 200;
     min-width: 600px;
+    max-width: calc(100vw - 32px);   /* never overflow the viewport */
+    box-sizing: border-box;
 }
 
 .simple-dropdown {
@@ -2561,16 +2562,21 @@ color:var(--heading-color);
     color: var(--secondary);
 }
 
-.nav-item.has-dropdown:hover .mega-dropdown,
-.nav-item.has-dropdown:hover .simple-dropdown {
+/* ---- Desktop: open on hover ---- */
+.nav-item.has-dropdown:hover .mega-dropdown {
     display: grid;
 }
 
-.simple-dropdown {
-    display: none;
+.nav-item.has-dropdown:hover .simple-dropdown {
+    display: block;
 }
 
-.nav-item.has-dropdown:hover .simple-dropdown {
+/* ---- Mobile: open on tap (navbar.js adds "dropdown-open") ---- */
+.nav-item.has-dropdown.dropdown-open .mega-dropdown {
+    display: grid;
+}
+
+.nav-item.has-dropdown.dropdown-open .simple-dropdown {
     display: block;
 }
 
@@ -2613,6 +2619,28 @@ color:var(--heading-color);
     cursor: default;
 }
 
+/* ---- Mobile: collapse to a single column that flows
+        naturally inside the slide-out menu ---- */
+@media (max-width: 900px) {
+
+    .mega-dropdown {
+        position: static;
+        min-width: 0;
+        max-width: none;
+        width: 100%;
+        grid-template-columns: 1fr;
+        box-shadow: none;
+        padding: 12px 16px;
+    }
+
+    .simple-dropdown {
+        position: static;
+        min-width: 0;
+        width: 100%;
+        box-shadow: none;
+    }
+
+}
 /* ============================================
    SEARCH OVERLAY
 ============================================ */

@@ -69,6 +69,11 @@ function loadCategoryFilterList() {
 }
 
 
+// Show only the last segment of a "Parent > Child" category name
+function getCategoryDisplayName(name) {
+    return name.split(">").map(part => part.trim()).pop();
+}
+
 function renderCategoryFilterList(categories) {
 
     categoryFilterList.innerHTML = "";
@@ -90,7 +95,8 @@ function renderCategoryFilterList(categories) {
 
         const li = document.createElement("li");
         const button = document.createElement("button");
-        button.textContent = cat.name;
+        button.textContent = getCategoryDisplayName(cat.name);
+        button.title = cat.name;
         button.dataset.slug = cat.slug;
 
         button.addEventListener("click", () => selectCategory(cat.slug, button));

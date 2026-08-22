@@ -245,6 +245,11 @@ if (!slug) {
 // (clicking a category navigates to that category page)
 // ========================================
 
+// Show only the last segment of a "Parent > Child" category name
+function getCategoryDisplayName(name) {
+    return name.split(">").map(part => part.trim()).pop();
+}
+
 function renderCategoryFilterList(categories) {
 
     if (!categoryFilterList) return;
@@ -256,7 +261,8 @@ function renderCategoryFilterList(categories) {
         const li = document.createElement("li");
 
         const button = document.createElement("button");
-        button.textContent = cat.name;
+        button.textContent = getCategoryDisplayName(cat.name);
+        button.title = cat.name;
 
         if (cat.slug === slug) {
             button.classList.add("active");

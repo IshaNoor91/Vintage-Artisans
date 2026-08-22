@@ -1,0 +1,60 @@
+/* ==========================================================
+   CHECKOUT — payment method selector + panels
+   Add to checkout.html: <link rel="stylesheet" href="css/checkout-payment.css">
+   ========================================================== */
+
+.payment-method-group {
+  margin: 24px 0 16px;
+}
+
+.payment-method-group h3 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.payment-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e3e1db;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.payment-option:has(input:checked) {
+  border-color: #2f6f4f;
+  background: #f2f7f4;
+}
+
+.payment-option input {
+  accent-color: #2f6f4f;
+}
+
+.payment-panel {
+  border: 1px solid #e3e1db;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fafaf8;
+}
+
+.stripe-card-element {
+  padding: 12px;
+  border: 1px solid #e3e1db;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.bank-details p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.bank-instructions {
+  margin-top: 10px !important;
+  color: #6b6b6b;
+  font-size: 13px !important;
+}

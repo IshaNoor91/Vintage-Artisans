@@ -7,6 +7,18 @@ const API_BASE = "https://vintage-artisans-production.up.railway.app/api";
 
 const container = document.getElementById("checkout-container");
 
+// ========================================
+// STRIPE CONFIG
+// Replace with your real publishable key when ready.
+// This only needs the PUBLISHABLE key (safe for the browser) —
+// never put your secret key here.
+// ========================================
+
+const STRIPE_PUBLISHABLE_KEY = "pk_test_REPLACE_WITH_YOUR_PUBLISHABLE_KEY";
+
+let stripe = null;
+let cardElement = null;
+
 
 // ========================================
 // CART HELPERS
@@ -134,6 +146,71 @@ function renderCheckout() {
                         <textarea id="notes" name="notes" rows="3"></textarea>
                     </div>
 
+
+                    <!-- ============ PAYMENT METHOD ============ -->
+
+                    <div class="payment-method-group">
+
+                        <h3>Payment Method</h3>
+
+                        <label class="payment-option">
+                            <input type="radio" name="paymentMethod" value="cod" checked>
+                            <span>Cash on Delivery</span>
+                        </label>
+
+                        <label class="payment-option">
+                            <input type="radio" name="paymentMethod" value="stripe">
+                            <span>Pay with Card (Stripe)</span>
+                        </label>
+
+                        <label class="payment-option">
+                            <input type="radio" name="paymentMethod" value="bank_transfer">
+                            <span>Bank Transfer</span>
+                        </label>
+
+                    </div>
+
+
+                    <!-- ---- Stripe card panel ---- -->
+
+                    <div id="payment-panel-stripe" class="payment-panel" style="display:none;">
+
+                        <label>Card Details</label>
+
+                        <div id="stripe-card-element" class="stripe-card-element"></div>
+
+                        <div id="stripe-card-errors" class="checkout-error"></div>
+
+                    </div>
+
+
+                    <!-- ---- Bank transfer panel ---- -->
+
+                    <div id="payment-panel-bank" class="payment-panel" style="display:none;">
+
+                        <div class="bank-details">
+
+                            <p><strong>Bank Name:</strong> [YOUR BANK NAME]</p>
+                            <p><strong>Account Title:</strong> [YOUR ACCOUNT TITLE]</p>
+                            <p><strong>Account Number:</strong> [YOUR ACCOUNT NUMBER]</p>
+                            <p><strong>IBAN:</strong> [YOUR IBAN]</p>
+
+                            <p class="bank-instructions">
+                                Please transfer the total amount to the account above, then
+                                enter your transaction/reference ID below. We'll confirm
+                                your order once the payment is verified.
+                            </p>
+
+                        </div>
+
+                        <div class="form-group">
+                            <label for="transaction-ref">Transaction / Reference ID</label>
+                            <input type="text" id="transaction-ref" name="transactionRef">
+                        </div>
+
+                    </div>
+
+
                     <div id="checkout-error" class="checkout-error"></div>
 
                     <button type="submit" class="checkout-btn btn" id="place-order-btn">
@@ -168,6 +245,75 @@ function renderCheckout() {
     document
         .getElementById("checkout-form")
         .addEventListener("submit", handleSubmit);
+
+    document
+        .querySelectorAll('input[name="paymentMethod"]')
+        .forEach(radio => radio.addEventListener("change", updatePaymentUI));
+
+    updatePaymentUI();
+
+}
+
+
+// ========================================
+// SHOW/HIDE PAYMENT PANELS + BUTTON LABEL
+// ========================================
+
+function getSelectedPaymentMethod() {
+    const checked = document.querySelector('input[name="paymentMethod"]:checked');
+    return checked ? checked.value : "cod";
+}
+
+function updatePaymentUI() {
+
+    const method = getSelectedPaymentMethod();
+
+    document.getElementById("payment-panel-stripe").style.display =
+        method === "stripe" ? "block" : "none";
+
+    document.getElementById("payment-panel-bank").style.display =
+        method === "bank_transfer" ? "block" : "none";
+
+    const submitButton = document.getElementById("place-order-btn");
+
+    if (method === "stripe") {
+        submitButton.textContent = "Pay & Place Order";
+        initStripeElements();
+    } else if (method === "bank_transfer") {
+        submitButton.textContent = "Place Order — Bank Transfer";
+    } else {
+        submitButton.textContent = "Place Order — Cash on Delivery";
+    }
+
+}
+
+
+// ========================================
+// STRIPE ELEMENTS SETUP (lazy — only once)
+// ========================================
+
+function initStripeElements() {
+
+    if (stripe && cardElement) return; // already set up
+
+    if (!window.Stripe) {
+        console.error(
+            "Stripe.js not loaded. Add <script src=\"https://js.stripe.com/v3/\"></script> to checkout.html before checkout.js."
+        );
+        return;
+    }
+
+    stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+
+    const elements = stripe.elements();
+    cardElement = elements.create("card");
+    cardElement.mount("#stripe-card-element");
+
+    cardElement.on("change", (event) => {
+        document.getElementById("stripe-card-errors").textContent =
+            event.error ? event.error.message : "";
+    });
+
 }
 
 
@@ -184,6 +330,14 @@ async function handleSubmit(event) {
     const errorBox = document.getElementById("checkout-error");
 
     errorBox.textContent = "";
+
+    const paymentMethod = getSelectedPaymentMethod();
+
+    // ---- Bank transfer requires a reference number ----
+    if (paymentMethod === "bank_transfer" && !form.transactionRef.value.trim()) {
+        errorBox.textContent = "Please enter your transaction/reference ID.";
+        return;
+    }
 
     const cart = getCart();
     const subtotal = cart.reduce(
@@ -208,13 +362,60 @@ async function handleSubmit(event) {
             quantity: Number(item.quantity || 1)
         })),
         subtotal: subtotal,
-        total: subtotal
+        total: subtotal,
+        paymentMethod: paymentMethod
     };
 
     submitButton.disabled = true;
-    submitButton.textContent = "Placing order...";
 
     try {
+
+        // ---- STRIPE: create + confirm the card payment first ----
+        if (paymentMethod === "stripe") {
+
+            submitButton.textContent = "Processing payment...";
+
+            if (!stripe || !cardElement) {
+                throw new Error("Card payment isn't ready yet. Please try again in a moment.");
+            }
+
+            const intentResponse = await fetch(`${API_BASE}/create-payment-intent`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount: subtotal })
+            });
+
+            const intentData = await intentResponse.json();
+
+            if (!intentResponse.ok || !intentData.success) {
+                throw new Error(intentData.message || "Could not start payment.");
+            }
+
+            const result = await stripe.confirmCardPayment(intentData.clientSecret, {
+                payment_method: {
+                    card: cardElement,
+                    billing_details: {
+                        name: payload.customer.fullName,
+                        email: payload.customer.email || undefined,
+                        phone: payload.customer.phone || undefined
+                    }
+                }
+            });
+
+            if (result.error) {
+                throw new Error(result.error.message || "Card payment failed.");
+            }
+
+            payload.paymentReference = result.paymentIntent.id;
+
+        // ---- BANK TRANSFER: attach the reference the customer entered ----
+        } else if (paymentMethod === "bank_transfer") {
+
+            payload.paymentReference = form.transactionRef.value.trim();
+
+        }
+
+        submitButton.textContent = "Placing order...";
 
         const response = await fetch(`${API_BASE}/orders`, {
             method: "POST",
@@ -229,17 +430,17 @@ async function handleSubmit(event) {
         }
 
         clearCart();
-        renderConfirmation(data.orderId);
+        renderConfirmation(data.orderId, paymentMethod);
 
     } catch (error) {
 
         console.error("ORDER SUBMIT ERROR:", error);
 
         errorBox.textContent =
-            "Something went wrong placing your order. Please try again.";
+            error.message || "Something went wrong placing your order. Please try again.";
 
         submitButton.disabled = false;
-        submitButton.textContent = "Place Order — Cash on Delivery";
+        updatePaymentUI(); // restores the correct button label
 
     }
 
@@ -250,7 +451,15 @@ async function handleSubmit(event) {
 // CONFIRMATION
 // ========================================
 
-function renderConfirmation(orderId) {
+function renderConfirmation(orderId, paymentMethod) {
+
+    let note = "We'll be in touch to confirm delivery.";
+
+    if (paymentMethod === "bank_transfer") {
+        note = "We'll verify your bank transfer and confirm your order shortly.";
+    } else if (paymentMethod === "stripe") {
+        note = "Your payment was successful — we'll get your order ready for delivery.";
+    }
 
     container.innerHTML = `
 
@@ -262,7 +471,7 @@ function renderConfirmation(orderId) {
 
             <p>
                 Thanks for your order${orderId ? ` — reference #${orderId}` : ""}.
-                We'll be in touch to confirm delivery.
+                ${note}
             </p>
 
             <a href="shop.html" class="btn">Continue Shopping</a>
