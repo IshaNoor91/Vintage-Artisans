@@ -41,6 +41,49 @@ body{
     background:var(--primary-color);
 
 }
+/*footer*/
+.footer-social {
+    display: flex !important;
+    width: 100%;
+    justify-content: center !important;
+    align-items: center;
+    gap: 16px;
+    margin: 32px auto 0;
+    padding: 0;
+    text-align: center;
+}
+
+.footer-social a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: #fff;
+    text-decoration: none;
+    padding-top: 12px;
+}
+
+.footer-social a i {
+    display: block;
+    line-height: 1;
+    font-size: 16px;
+}
+
+.footer-social a:hover {
+    transform: translateY(-3px);
+    opacity: 0.9;
+}
+
+.footer-social .social-facebook  { background: #1877F2; }
+.footer-social .social-instagram {
+    background: radial-gradient(circle at 30% 107%,
+        #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%);
+}
+.footer-social .social-email    { background: #262626; }
+.footer-social .social-linkedin { background: #5b4b8a; } /* purple to roughly match your reference image — swap to #0A66C2 for LinkedIn's real brand blue if you'd rather be accurate */
+.footer-social .social-youtube  { background: #FF0000; }
 
 nav{
     position: absolute;
@@ -401,7 +444,7 @@ color:var(--heading-color);
 }
 
 .cta-banner{
-    background: url("images/cta-banner.webp") center center/cover no-repeat;
+    background: url("../images/Gemini_Generated_Image_lb4ouylb4ouylb4o\ \(1\).png") center center/cover no-repeat;
     position: relative;
 }
 
@@ -474,7 +517,7 @@ color:var(--heading-color);
 .footer-column a:hover{
     color: var(--secondary-color);
 }
-.footer-social{
+/*.footer-social{
     display: flex;
     justify-content: center;
     gap: 20px;
@@ -495,7 +538,7 @@ color:var(--heading-color);
 .footer-social a:hover{
     background: var(--secondary-color);
     transform: translateY(-5px);
-}
+}*/
 .footer-bottom{
     text-align: center;
     border-top: 1px solid rgba(255,255,255,0.2);
@@ -614,6 +657,7 @@ color:var(--heading-color);
 
     .story-content{
         width:90%;
+        background:url("../images/Gemini_Generated_Image_lb4ouylb4ouylb4o\ \(1\).png");
     }
 
     .story-content h2{
@@ -626,7 +670,7 @@ color:var(--heading-color);
     .cta-overlay{
         padding:70px 20px;
     }
-
+    
     .cta-content h2{
         font-size:30px;
     }
@@ -2827,7 +2871,9 @@ color:var(--heading-color);
     color: #555;
     margin: 0;
 }
-
+.story-block p{
+    padding-bottom: 30px;
+}
 .story-block {
     max-width: 900px;
     margin: 0 auto 60px;
@@ -2854,13 +2900,16 @@ color:var(--heading-color);
     width: 100%;
     border-radius: 10px;
 }
-
+.split-feature p{
+    padding-bottom: 30px;
+}
 .split-feature h3 {
     color: var(--primary);
 }
 
 .contact-layout {
     display: grid;
+    padding-top: 30px;
     grid-template-columns: 1fr 1fr;
     max-width: 1200px;
     margin: 0 auto;
@@ -2875,8 +2924,12 @@ color:var(--heading-color);
 .contact-form-panel h2 {
     color: var(--primary);
     margin-top: 0;
+    padding-bottom: 10px;
 }
-
+.contact-form-panel p {
+   
+    padding-bottom: 10px;
+}
 .contact-form-panel input,
 .contact-form-panel textarea {
     width: 100%;
@@ -2889,7 +2942,7 @@ color:var(--heading-color);
 }
 
 .contact-info-panel {
-    background: linear-gradient(rgba(5,41,94,0.55), rgba(5,41,94,0.55)),
+    background: linear-gradient(rgba(150, 172, 204, 0.55), rgba(5,41,94,0.55)),
                 url("../images/bowl.webp") center/cover;
     color: #fff;
     padding: 60px 48px;
@@ -2900,10 +2953,17 @@ color:var(--heading-color);
 
 .contact-info-panel h3 {
     font-size: 26px;
+    padding-bottom: 10px;
 }
+.contact-info-panel p {
+   
+    padding-bottom: 10px;
+}
+
 
 .contact-topline {
     display: flex;
+    padding-top: 30px;
     justify-content: space-around;
     padding: 40px 24px;
     max-width: 1100px;
