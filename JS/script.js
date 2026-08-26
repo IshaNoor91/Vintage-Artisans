@@ -43,7 +43,7 @@ fetch("https://vintage-artisans-production.up.railway.app/api/products?limit=12"
                             }
                         </p>
 
-                        <a href="#" class="btn">
+                        <a href="product.html?id=${product.id}" class="btn">
                             View Details
                         </a>
 

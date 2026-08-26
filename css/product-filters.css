@@ -205,6 +205,14 @@
 @media (max-width: 860px) {
   .shop-layout {
     flex-direction: column;
+    align-items: stretch; /* was flex-start: in column mode that shrink-wraps
+                              .shop-main to its content width instead of the
+                              full viewport, which is what was breaking the
+                              product grid on mobile */
+  }
+
+  .shop-main {
+    width: 100%;
   }
 
   .mobile-filter-toggle {

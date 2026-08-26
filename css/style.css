@@ -2758,6 +2758,7 @@ color:var(--heading-color);
     border-radius: 6px;
     color: var(--primary);
     font-size: 14px;
+    text-decoration: none;
 }
 
 .search-result-item:hover {
@@ -2773,6 +2774,7 @@ color:var(--heading-color);
 .search-result-product img {
     width: 36px;
     height: 36px;
+    flex-shrink: 0;
     object-fit: cover;
     border-radius: 4px;
 }

@@ -308,7 +308,7 @@ app.get("/api/search", async (req, res) => {
                 images
             FROM products
             WHERE published = true
-              AND (name ILIKE $1 OR short_description ILIKE $1)
+              AND name ILIKE $1
             ORDER BY name ASC
             LIMIT 6
             `,
@@ -1163,54 +1163,6 @@ app.patch("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => 
     } catch (error) {
         console.error("Error updating order status:", error);
         res.status(500).json({ success: false, message: "Failed to update order status" });
-    }
-
-});
-
-
-app.get("/api/search", async (req, res) => {
-
-    try {
-        const q = (req.query.q || "").trim();
-
-        if (!q) {
-            return res.json({ success: true, products: [], categories: [] });
-        }
-
-        const like = `%${q}%`;
-
-        const productsResult = await pool.query(
-            `
-            SELECT id, name, regular_price, sale_price, images
-            FROM products
-            WHERE published = true
-            AND name ILIKE $1
-            ORDER BY name
-            LIMIT 8
-            `,
-            [like]
-        );
-
-        const categoriesResult = await pool.query(
-            `
-            SELECT id, name, slug
-            FROM categories
-            WHERE name ILIKE $1
-            ORDER BY name
-            LIMIT 8
-            `,
-            [like]
-        );
-
-        res.json({
-            success: true,
-            products: productsResult.rows,
-            categories: categoriesResult.rows
-        });
-
-    } catch (error) {
-        console.error("Error searching:", error);
-        res.status(500).json({ success: false, message: "Search failed" });
     }
 
 });
