@@ -29,6 +29,8 @@ export default function ProductForm() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     api.getCategories().then((data) => setCategories(data.categories));
@@ -64,6 +66,30 @@ export default function ProductForm() {
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleImageFiles(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    setUploadError("");
+    setUploading(true);
+
+    try {
+      const data = await api.uploadImages(files);
+
+      // Append the newly uploaded URLs after whatever's already there,
+      // so re-ordering / removing images by hand in the text field still works.
+      setForm((prev) => ({
+        ...prev,
+        images: [prev.images, ...data.urls].filter(Boolean).join(",")
+      }));
+    } catch (err) {
+      setUploadError(err.message);
+    } finally {
+      setUploading(false);
+      event.target.value = ""; // allow selecting the same file again later
+    }
   }
 
   function toggleCategory(categoryId) {
@@ -185,6 +211,33 @@ export default function ProductForm() {
                 value={form.images}
                 onChange={(e) => updateField("images", e.target.value)}
               />
+
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                <label
+                  className="btn btn-secondary"
+                  style={{
+                    display: "inline-flex",
+                    cursor: uploading ? "not-allowed" : "pointer",
+                    opacity: uploading ? 0.6 : 1,
+                    margin: 0
+                  }}
+                >
+                  {uploading ? "Uploading..." : "Upload Images"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageFiles}
+                    disabled={uploading}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  Uploads straight to storage and adds the link above — no need to paste a URL by hand.
+                </span>
+              </div>
+
+              {uploadError && <div className="error-text">{uploadError}</div>}
             </div>
 
             <div className="form-field full">

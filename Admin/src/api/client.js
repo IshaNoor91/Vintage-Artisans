@@ -42,12 +42,52 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Separate from request() above: this sends multipart/form-data, not JSON,
+// so it must NOT set a Content-Type header itself — the browser sets the
+// multipart boundary automatically when given a FormData body.
+async function uploadImages(files) {
+  const token = getToken();
+
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("images", file);
+  }
+
+  const response = await fetch(`${API_BASE}/admin/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData
+  });
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (response.status === 401) {
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminUsername");
+    window.location.href = "/login";
+    throw new Error("Session expired");
+  }
+
+  if (!response.ok || !data || data.success === false) {
+    throw new Error((data && data.message) || `Upload failed (${response.status})`);
+  }
+
+  return data; // { success: true, urls: [...] }
+}
+
 export const api = {
   login: (username, password) =>
     request("/admin/login", {
       method: "POST",
       body: JSON.stringify({ username, password })
     }),
+
+  uploadImages,
 
   getStats: () => request("/admin/stats"),
 

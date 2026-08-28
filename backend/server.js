@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const multer = require("multer");
+const { BlobServiceClient } = require("@azure/storage-blob");
 const pool = require("./db");
 
 // ========================================
@@ -26,6 +28,31 @@ app.use(cors({
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// ========================================
+// PRODUCT IMAGE UPLOADS (Azure Blob Storage)
+// Admin panel "choose file" uploads land here instead of someone having
+// to paste a URL by hand — see POST /api/admin/upload below.
+// Uses the same AZURE_STORAGE_CONNECTION_STRING / AZURE_CONTAINER_NAME
+// env vars as migrate-images-to-azure.js and setup-azure-storage.js.
+// ========================================
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB per image
+});
+
+// Wrapped in try/catch so a missing/invalid AZURE_STORAGE_CONNECTION_STRING
+// on this server doesn't crash the whole app on startup — it just makes the
+// /api/admin/upload route report a clear error until the Railway variable
+// is set (see the note below the route for what to add).
+let azureContainerClient = null;
+try {
+    azureContainerClient = BlobServiceClient
+        .fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING)
+        .getContainerClient(process.env.AZURE_CONTAINER_NAME || "product-images");
+} catch (error) {
+    console.error("Azure Blob Storage not configured — image uploads will fail until AZURE_STORAGE_CONNECTION_STRING is set:", error.message);
+}
 
 // ========================================
 // ADMIN AUTH MIDDLEWARE
@@ -797,6 +824,64 @@ app.get("/api/admin/stats", requireAdminAuth, async (req, res) => {
 
 });
 
+
+// ========================================================
+// ============  ADMIN: IMAGE UPLOAD  =======================
+// ========================================================
+// Takes files straight from the "choose file" input in ProductForm.jsx,
+// uploads each to Azure Blob Storage, and returns their public URLs so
+// the frontend can drop them into the product's `images` field — no more
+// needing to paste a URL (or a bare filename) by hand.
+
+app.post("/api/admin/upload", requireAdminAuth, upload.array("images", 6), async (req, res) => {
+
+    if (!azureContainerClient) {
+        return res.status(500).json({
+            success: false,
+            message: "Image storage isn't configured on the server (AZURE_STORAGE_CONNECTION_STRING is missing)."
+        });
+    }
+
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ success: false, message: "No files were uploaded" });
+    }
+
+    try {
+        const urls = [];
+
+        for (const file of req.files) {
+            const extension = (file.originalname.split(".").pop() || "jpg").toLowerCase();
+            const blobName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+
+            const blockBlobClient = azureContainerClient.getBlockBlobClient(blobName);
+            await blockBlobClient.uploadData(file.buffer, {
+                blobHTTPHeaders: { blobContentType: file.mimetype }
+            });
+
+            urls.push(blockBlobClient.url);
+        }
+
+        res.json({ success: true, urls });
+
+    } catch (error) {
+        console.error("Image upload failed:", error);
+        res.status(500).json({ success: false, message: "Upload failed" });
+    }
+
+});
+
+// Multer reports problems (e.g. a file over the 5MB limit) by calling
+// next(err) instead of throwing inside the route above — this catches
+// those and returns clean JSON instead of Express's default HTML error page.
+app.use("/api/admin/upload", (err, req, res, next) => {
+    if (err instanceof multer.MulterError || err) {
+        const message = err.code === "LIMIT_FILE_SIZE"
+            ? "One of those images is over the 5MB limit."
+            : err.message || "Upload failed";
+        return res.status(400).json({ success: false, message });
+    }
+    next();
+});
 
 // ========================================================
 // ============  ADMIN: PRODUCTS CRUD  =====================
