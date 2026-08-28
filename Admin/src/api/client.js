@@ -90,6 +90,8 @@ export const api = {
   uploadImages,
 
   getStats: () => request("/admin/stats"),
+  startImageRepair: () => request("/admin/repair-images", { method: "POST" }),
+  getRepairStatus: () => request("/admin/repair-images"),
 
   getProducts: () => request("/admin/products"),
   getProduct: (id) => request(`/admin/products/${id}`),

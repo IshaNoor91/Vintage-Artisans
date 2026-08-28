@@ -884,6 +884,132 @@ app.use("/api/admin/upload", (err, req, res, next) => {
 });
 
 // ========================================================
+// ============  ADMIN: REPAIR BROKEN IMAGES  ===============
+// ========================================================
+// One-time repair for the original 358 images migrated from WordPress.
+// What happened: migrate-images-to-azure.js downloaded each photo over
+// the machine's home internet connection, which was intercepting some
+// requests and silently substituting a small fake "security check" page
+// instead of the real photo — the script only checked that the download
+// "succeeded", not that what came back was actually an image, so those
+// fake pages got uploaded to Azure as if they were the real files (they
+// show up as ~211-byte "text/html" blobs instead of real photos).
+//
+// The fix has to download the real photos from a connection that ISN'T
+// affected by that interference. This server runs on Railway (not the
+// affected home network), so running the repair from here — instead of
+// from the office computer — re-downloads clean copies and overwrites
+// the bad blobs.
+//
+// originalImageUrls.json holds the pre-migration WordPress URLs (pulled
+// from full-backup.sql, taken before the migration overwrote them),
+// keyed by product id.
+
+const originalImageUrls = require("./original-image-urls.json");
+
+const repairState = {
+    running: false,
+    total: 0,
+    done: 0,
+    fixed: 0,
+    failed: 0,
+    startedAt: null,
+    finishedAt: null,
+    errors: []
+};
+
+async function runImageRepair() {
+    repairState.running = true;
+    repairState.total = 0;
+    repairState.done = 0;
+    repairState.fixed = 0;
+    repairState.failed = 0;
+    repairState.startedAt = new Date().toISOString();
+    repairState.finishedAt = null;
+    repairState.errors = [];
+
+    const entries = Object.entries(originalImageUrls);
+
+    // Count how many individual images we're about to attempt, so
+    // progress (done / total) means something on the status endpoint.
+    repairState.total = entries.reduce(
+        (sum, [, urls]) => sum + urls.split(",").map(u => u.trim()).filter(Boolean).length,
+        0
+    );
+
+    console.log(`[image-repair] Starting — ${repairState.total} image(s) across ${entries.length} product(s).`);
+
+    for (const [productId, urlsString] of entries) {
+        const urls = urlsString.split(",").map(u => u.trim()).filter(Boolean);
+
+        for (let i = 0; i < urls.length; i++) {
+            const originalUrl = urls[i];
+
+            try {
+                const response = await fetch(originalUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const contentType = response.headers.get("content-type") || "";
+                if (!contentType.startsWith("image/")) {
+                    // Same failure mode as before — didn't get a real image back.
+                    throw new Error(`Got "${contentType || "unknown"}" instead of an image`);
+                }
+
+                const buffer = Buffer.from(await response.arrayBuffer());
+                const extensionMatch = new URL(originalUrl).pathname.match(/\.([a-zA-Z0-9]+)$/);
+                const extension = (extensionMatch ? extensionMatch[1] : "jpg").toLowerCase();
+                const blobName = `${productId}-${i + 1}.${extension}`;
+
+                const blockBlobClient = azureContainerClient.getBlockBlobClient(blobName);
+                await blockBlobClient.uploadData(buffer, {
+                    blobHTTPHeaders: { blobContentType: contentType }
+                });
+
+                repairState.fixed++;
+                console.log(`[image-repair] Fixed ${blobName} (${buffer.length} bytes)`);
+
+            } catch (error) {
+                repairState.failed++;
+                const message = `Product ${productId} image ${i + 1}: ${error.message}`;
+                repairState.errors.push(message);
+                console.error(`[image-repair] FAILED — ${message}`);
+            }
+
+            repairState.done++;
+        }
+    }
+
+    repairState.running = false;
+    repairState.finishedAt = new Date().toISOString();
+    console.log(`[image-repair] Done. Fixed: ${repairState.fixed}, Failed: ${repairState.failed}`);
+}
+
+app.post("/api/admin/repair-images", requireAdminAuth, (req, res) => {
+
+    if (!azureContainerClient) {
+        return res.status(500).json({ success: false, message: "Image storage isn't configured on the server." });
+    }
+
+    if (repairState.running) {
+        return res.status(409).json({ success: false, message: "A repair is already running." });
+    }
+
+    // Deliberately not awaited — this can take several minutes for 358
+    // images, so it runs in the background and the button just polls
+    // GET /api/admin/repair-images for progress instead of hanging.
+    runImageRepair();
+
+    res.json({ success: true, message: "Repair started." });
+
+});
+
+app.get("/api/admin/repair-images", requireAdminAuth, (req, res) => {
+    res.json({ success: true, ...repairState });
+});
+
+// ========================================================
 // ============  ADMIN: PRODUCTS CRUD  =====================
 // ========================================================
 
