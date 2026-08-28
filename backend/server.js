@@ -946,7 +946,20 @@ async function runImageRepair() {
             const originalUrl = urls[i];
 
             try {
-                const response = await fetch(originalUrl);
+                // The old host (SiteGround) appears to challenge/block plain
+                // server-to-server requests (no browser fingerprint) and serve
+                // back an HTML "security check" page instead of the image —
+                // which is exactly what happened during the original migration
+                // too. Sending realistic browser-style headers is the first,
+                // no-VPN thing worth trying to get past that.
+                const response = await fetch(originalUrl, {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Referer": "https://thevintageartisans.com/"
+                    }
+                });
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
