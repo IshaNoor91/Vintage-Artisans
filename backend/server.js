@@ -18,7 +18,8 @@ app.use(cors({
     origin: [
         "http://127.0.0.1:5500",
         "http://localhost:5173",
-        "https://cozy-trifle-37f6b4.netlify.app"
+        "https://cozy-trifle-37f6b4.netlify.app",
+        "https://vintage-artisans.netlify.app"
     ]
 }));
 

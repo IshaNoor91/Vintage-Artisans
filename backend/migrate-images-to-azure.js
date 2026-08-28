@@ -12,13 +12,23 @@
    Usage (from the backend/ folder):
        node migrate-images-to-azure.js
 
-   Requires in backend/.env:
+   By default this reads DB credentials from .env, which is normally your
+   LOCAL database. To point it at the production database instead — without
+   touching .env — create backend/.env.production (gitignored, same DB_USER
+   / DB_HOST / DB_NAME / DB_PASSWORD / DB_PORT keys, copied from Railway's
+   Variables tab) and run:
+       node migrate-images-to-azure.js --env-file=.env.production
+
+   Requires (in whichever env file is used):
        AZURE_STORAGE_CONNECTION_STRING=...
        AZURE_CONTAINER_NAME=product-images   (optional, this is the default)
    Also uses the same DB_* variables db.js already reads from .env.
    ============================================================ */
 
-require("dotenv").config();
+const envFileArg = process.argv.slice(2).find(arg => arg.startsWith("--env-file="));
+const envFile = envFileArg ? envFileArg.split("=")[1] : ".env";
+
+require("dotenv").config({ path: envFile });
 
 const { BlobServiceClient } = require("@azure/storage-blob");
 const pool = require("./db");
@@ -84,6 +94,13 @@ async function migrateOneImage(containerClient, productId, imageIndex, url, azur
 }
 
 async function main() {
+
+    console.log(`Using env file: ${envFile}`);
+    console.log(`Target database host: "${process.env.DB_HOST}"`);
+    console.log(`DB_USER: "${process.env.DB_USER}"`);
+    console.log(`DB_NAME: "${process.env.DB_NAME}"`);
+    console.log(`DB_PORT: "${process.env.DB_PORT}"`);
+    console.log(`DB_PASSWORD length: ${(process.env.DB_PASSWORD || "").length} characters (not shown)\n`);
 
     if (!connectionString) {
         console.error(
