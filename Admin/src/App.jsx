@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -13,10 +13,35 @@ import Orders from "./pages/Orders.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
 
 function AdminLayout({ children }) {
+  // On mobile the sidebar is an off-canvas drawer, toggled by the
+  // hamburger button in the mobile topbar (both hidden on desktop via CSS).
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div className="app-shell">
-      <Sidebar />
-      <main className="main-content">{children}</main>
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      <div className="content-area">
+        <header className="mobile-topbar">
+          <button
+            type="button"
+            className="hamburger-btn"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div className="mobile-topbar-brand">Vintage Artisans</div>
+        </header>
+
+        <main className="main-content">{children}</main>
+      </div>
     </div>
   );
 }

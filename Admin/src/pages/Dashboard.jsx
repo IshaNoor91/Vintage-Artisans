@@ -54,6 +54,7 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
+        <div className="table-scroll">
         <table>
           <thead>
             <tr>
@@ -88,6 +89,7 @@ export default function Dashboard() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

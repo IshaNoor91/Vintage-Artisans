@@ -88,6 +88,7 @@ export default function Categories() {
 
       {categories && (
         <div className="card">
+          <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -153,6 +154,7 @@ export default function Categories() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

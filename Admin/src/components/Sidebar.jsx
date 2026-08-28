@@ -9,17 +9,25 @@ const LINKS = [
   { to: "/orders", label: "Orders" }
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { username, logout } = useAuth();
 
   return (
-    <aside className="sidebar">
+    <aside className={"sidebar" + (isOpen ? " open" : "")}>
       <div className="sidebar-brand">
         <div className="sidebar-brand-mark">VA</div>
         <div className="sidebar-brand-text">
           Vintage Artisans
           <span>ADMIN</span>
         </div>
+        <button
+          type="button"
+          className="sidebar-close-btn"
+          onClick={onClose}
+          aria-label="Close menu"
+        >
+          &times;
+        </button>
       </div>
 
       <nav className="sidebar-nav">
@@ -28,6 +36,7 @@ export default function Sidebar() {
             key={link.to}
             to={link.to}
             end={link.end}
+            onClick={onClose}
             className={({ isActive }) =>
               "sidebar-link" + (isActive ? " active" : "")
             }

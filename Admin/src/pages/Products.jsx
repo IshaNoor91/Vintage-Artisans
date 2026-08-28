@@ -46,6 +46,7 @@ export default function Products() {
 
       {products && (
         <div className="card">
+          <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -109,6 +110,7 @@ export default function Products() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

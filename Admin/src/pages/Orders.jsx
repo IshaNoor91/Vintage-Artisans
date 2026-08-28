@@ -27,6 +27,7 @@ export default function Orders() {
 
       {orders && (
         <div className="card">
+          <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -70,6 +71,7 @@ export default function Orders() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

@@ -47,9 +47,10 @@ export default function OrderDetail() {
         </Link>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+      <div className="order-detail-grid">
         <div className="card" style={{ padding: 20 }}>
           <h3 style={{ marginTop: 0 }}>Items</h3>
+          <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -70,6 +71,7 @@ export default function OrderDetail() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <div
             style={{
