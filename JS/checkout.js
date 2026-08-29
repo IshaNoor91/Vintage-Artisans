@@ -5,47 +5,14 @@ const CART_KEY = "vintageArtisansCart";
 
 const API_BASE = "https://vintage-artisans-production.up.railway.app/api";
 
-// Pakistan orders ship locally; every other country here gets sent to
-// ShipStation automatically once the order is placed (see backend
-// server.js). IMPORTANT: these names must match, character for
-// character, the keys in backend/country-codes.js — that's how the
-// backend turns "United States" into the "US" code ShipStation needs.
-const COUNTRIES = [
-    "Pakistan", "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
-    "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bahamas",
-    "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize",
-    "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana",
-    "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia",
-    "Cameroon", "Canada", "Cape Verde", "Central African Republic", "Chad",
-    "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica",
-    "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti",
-    "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador",
-    "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia",
-    "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany",
-    "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau",
-    "Guyana", "Haiti", "Honduras", "Hong Kong", "Hungary", "Iceland",
-    "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy",
-    "Ivory Coast", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya",
-    "Kiribati", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", "Latvia",
-    "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania",
-    "Luxembourg", "Macau", "Madagascar", "Malawi", "Malaysia", "Maldives",
-    "Mali", "Malta", "Mauritania", "Mauritius", "Mexico", "Moldova",
-    "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar",
-    "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua",
-    "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman",
-    "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru",
-    "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia",
-    "Rwanda", "Saint Lucia", "Samoa", "San Marino", "Saudi Arabia",
-    "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore",
-    "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa",
-    "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname",
-    "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania",
-    "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago",
-    "Tunisia", "Turkey", "Turkmenistan", "Uganda", "Ukraine",
-    "United Arab Emirates", "United Kingdom", "United States", "Uruguay",
-    "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam",
-    "Yemen", "Zambia", "Zimbabwe"
-];
+// Only shipping to these two countries for now. Pakistan orders ship
+// locally; a UK order gets sent to ShipStation automatically once the
+// order is placed (see backend server.js). IMPORTANT: these names must
+// match, character for character, the keys in backend/country-codes.js
+// — that's how the backend turns "United Kingdom" into the "GB" code
+// ShipStation needs. To ship to more countries later, add the name here
+// AND confirm it already exists in backend/country-codes.js.
+const COUNTRIES = ["Pakistan", "United Kingdom"];
 
 const container = document.getElementById("checkout-container");
 
