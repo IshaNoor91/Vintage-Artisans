@@ -50,7 +50,10 @@ function loadCategoryFilterList() {
 
     if (!categoryFilterList) return;
 
-    fetch(`${API_BASE}/categories`)
+    // type=product excludes the Design Family categories (Blue Felicity,
+    // Blue Pattern, ...) — those only belong in the Design Family nav
+    // menu, never in this sidebar filter.
+    fetch(`${API_BASE}/categories?type=product`)
 
         .then(response => response.json())
 

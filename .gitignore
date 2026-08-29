@@ -1,5 +1,15 @@
 .vscode/
 
+# Secrets — never commit these (database password, JWT secret, Azure keys).
 .env
+.env.*
 backend/.env
-backend/.env.production
+backend/.env.*
+
+# Temporary local folder used once to re-upload the original WordPress
+# images to Azure — the images already live in Azure, not needed in git.
+backend/original-images/
+
+# Build/install output — regenerates from package.json, never needs to be
+# in git (and makes commits noisy every time `npm run dev`/`npm install` runs).
+node_modules/

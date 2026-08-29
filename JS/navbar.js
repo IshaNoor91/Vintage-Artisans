@@ -1,10 +1,13 @@
 /* ============================================
    NAVBAR — shared across every page
    - Populates the Shop dropdown using ONLY
-     categories that really exist in the database
-     (never fabricates a link).
-   - Family Design dropdown items stay as inert
-     placeholders until those categories exist.
+     "product" type categories that really exist
+     in the database (never fabricates a link).
+   - Populates the Design Family dropdown using
+     ONLY "design" type categories — kept
+     completely separate so Design Family entries
+     never show up in the Shop/category sidebar
+     filters, and Shop entries never show up here.
    - Handles search and mobile menu toggling.
 ============================================ */
 
@@ -15,21 +18,24 @@ const API_BASE_NAV = "https://vintage-artisans-production.up.railway.app/api";
 // become clickable links.
 const SHOP_MENU = {
     "Camel Skin Lamp": {
-        url: "https://thevintageartisans.com/product-category/camel-skin-lamp/",
-        items: ["Box Shaped Lamps", "Glass Shaped Lamps", "Moon Shaped Lamps", "Round Table Lamps", "Vase Lamps"]
+        // matchName is looked up against the real category list (same as
+        // items below) so this heading links to OUR category page —
+        // never the old thevintageartisans.com WordPress site.
+        matchName: "Camel Skin Lamps",
+        items: ["Box Shaped Lamps", "Glass Shaped Lamps", "Moon-Shaped Lamps", "Round Table Lamps", "Vase Shaped Lamps"]
     },
     "Blue Pottery": {
-        url: "https://thevintageartisans.com/product-category/blue-pottery/",
-        items: ["Bowls", "Tea Sets", "Pottery Jars", "Serving Dishes", "Tea Coasters", "Tea Mugs", "Dinner Sets"]
+        matchName: "Blue Pottery",
+        items: ["Bowls", "Blue Pottery Karahi", "Tea Sets", "Blue Pottery Jars", "Handies & Cover Pots", "Serving Dishes", "Plates & Platters", "Tea Coasters", "Tea Mugs", "Dinner Sets"]
     },
     "Decor": {
-        url: "https://thevintageartisans.com/product-category/blue-pottery/decor-blue-pottery/",
-        items: ["Vases", "Planters", "Wall Frames", "Aromatic Warmers", "Table Decoration", "Lamps"]
+        matchName: "Decor",
+        items: ["Vases", "Planters", "Handcrafted Wall Frames", "Handcrafted Aromatic Warmers", "Table Decoration", "Lamps"]
     }
 };
 
-// Family Design items — not in the database yet, so these render
-// as inert placeholders (no href) until real categories exist.
+// Design Family items — matched against real "design" type categories the
+// same way the Shop menu matches "product" type categories below.
 const FAMILY_DESIGN_ITEMS = [
     "Blue Felicity", "Blue Pattern", "Blue Flower", "Tranquility", "Serina Blue",
     "Blue Celico", "Spring Pattern", "Breeze Blue", "Green Flower", "Jungle Flower",
@@ -41,24 +47,29 @@ function normalizeName(name) {
     return name.trim().toLowerCase();
 }
 
-async function fetchRealCategories() {
+async function fetchCategories(type) {
     try {
-        const response = await fetch(`${API_BASE_NAV}/categories`);
+        const response = await fetch(`${API_BASE_NAV}/categories?type=${type}`);
         const data = await response.json();
         return data.success ? data.categories : [];
     } catch (error) {
-        console.error("Failed to load categories for nav:", error);
+        console.error(`Failed to load ${type} categories for nav:`, error);
         return [];
     }
 }
 
-function buildShopDropdown(realCategories) {
+function buildByNameMap(categories) {
     const byName = new Map();
-    realCategories.forEach(cat => {
+    categories.forEach(cat => {
         // category names may be "Parent > Child" — match on the last segment
         const parts = cat.name.split(">").map(p => p.trim());
         byName.set(normalizeName(parts[parts.length - 1]), cat);
     });
+    return byName;
+}
+
+function buildShopDropdown(realCategories) {
+    const byName = buildByNameMap(realCategories);
 
     const container = document.getElementById("shop-mega-dropdown");
     if (!container) return;
@@ -66,7 +77,16 @@ function buildShopDropdown(realCategories) {
     let html = "";
 
     Object.entries(SHOP_MENU).forEach(([groupName, group]) => {
-        html += `<div class="mega-col"><h4><a href="${group.url}" target="_blank" rel="noopener">${groupName}</a></h4><ul>`;
+        // Link the column heading to OUR site's category page (found the
+        // same way the items below are matched). If no match is found,
+        // render it as plain (non-clickable) text instead of ever falling
+        // back to the old WordPress site.
+        const groupMatch = byName.get(normalizeName(group.matchName));
+        const headingHtml = groupMatch
+            ? `<a href="category.html?slug=${groupMatch.slug}">${groupName}</a>`
+            : groupName;
+
+        html += `<div class="mega-col"><h4>${headingHtml}</h4><ul>`;
 
         group.items.forEach(itemName => {
             const match = byName.get(normalizeName(itemName));
@@ -84,9 +104,11 @@ function buildShopDropdown(realCategories) {
     container.innerHTML = html;
 }
 
-function buildFamilyDesignDropdown() {
+function buildFamilyDesignDropdown(realDesignCategories) {
     const container = document.getElementById("family-design-dropdown");
     if (!container) return;
+
+    const byName = buildByNameMap(realDesignCategories);
 
     const third = Math.ceil(FAMILY_DESIGN_ITEMS.length / 3);
     const columns = [
@@ -98,7 +120,12 @@ function buildFamilyDesignDropdown() {
     container.innerHTML = columns.map(col => `
         <div class="mega-col">
             <ul>
-                ${col.map(name => `<li class="menu-item-disabled">${name}</li>`).join("")}
+                ${col.map(name => {
+                    const match = byName.get(normalizeName(name));
+                    return match
+                        ? `<li><a href="category.html?slug=${match.slug}">${name}</a></li>`
+                        : `<li class="menu-item-disabled">${name}</li>`;
+                }).join("")}
             </ul>
         </div>
     `).join("");
@@ -226,9 +253,12 @@ function setupMobileMenu() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const realCategories = await fetchRealCategories();
-    buildShopDropdown(realCategories);
-    buildFamilyDesignDropdown();
+    const [productCategories, designCategories] = await Promise.all([
+        fetchCategories("product"),
+        fetchCategories("design")
+    ]);
+    buildShopDropdown(productCategories);
+    buildFamilyDesignDropdown(designCategories);
     setupSearch();
     setupMobileMenu();
 });

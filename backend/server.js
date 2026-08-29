@@ -372,14 +372,22 @@ app.get("/api/search", async (req, res) => {
 
 app.get("/api/categories", async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT
-                id,
-                name,
-                slug
-            FROM categories
-            ORDER BY name
-        `);
+        // ?type=product or ?type=design filters to just that kind of
+        // category (used by the storefront's Shop/Design Family menus and
+        // the shop/category sidebar filters, which should never mix the
+        // two). No ?type= at all (e.g. the admin panel) returns everything.
+        const { type } = req.query;
+        const params = [];
+        let query = `SELECT id, name, slug FROM categories`;
+
+        if (type === "product" || type === "design") {
+            query += ` WHERE category_type = $1`;
+            params.push(type);
+        }
+
+        query += ` ORDER BY name`;
+
+        const result = await pool.query(query, params);
 
         res.json({
             success: true,

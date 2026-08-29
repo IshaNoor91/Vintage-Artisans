@@ -57,6 +57,24 @@ if (!slug) {
     // LOAD CATEGORY NAME + BREADCRUMB + SIDEBAR LIST
     // ========================================
 
+    // Sidebar filter list must never include the Design Family categories
+    // (Blue Felicity, Blue Pattern, ...) — only real product categories.
+    fetch(`${API_BASE}/categories?type=product`)
+
+        .then(response => response.json())
+
+        .then(data => {
+            if (data.success) renderCategoryFilterList(data.categories);
+        })
+
+        .catch(error => {
+            console.error("CATEGORIES SIDEBAR API ERROR:", error);
+        });
+
+    // Unfiltered fetch — the page being viewed could be a Design Family
+    // category (e.g. category.html?slug=blue-felicity), so the title and
+    // breadcrumb lookup below needs to see every category, not just
+    // product ones.
     fetch(`${API_BASE}/categories`)
 
         .then(response => {
@@ -72,14 +90,6 @@ if (!slug) {
         .then(data => {
 
             console.log("Categories API:", data);
-
-
-            // ========================================
-            // BUILD SIDEBAR CATEGORY LIST
-            // ========================================
-
-            renderCategoryFilterList(data.categories);
-
 
             const category = data.categories.find(
                 item => item.slug === slug
