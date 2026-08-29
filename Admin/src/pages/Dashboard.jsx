@@ -6,44 +6,13 @@ import { OrderStatusBadge } from "../components/StatusBadge.jsx";
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
-  const [repair, setRepair] = useState(null);
-  const [repairError, setRepairError] = useState("");
 
   useEffect(() => {
     api
       .getStats()
       .then(setStats)
       .catch((err) => setError(err.message));
-
-    // In case a repair was already running from a previous visit, pick up
-    // its progress instead of showing a blank "Repair Images" button.
-    api.getRepairStatus().then((data) => {
-      setRepair(data);
-      if (data.running) pollRepairStatus();
-    }).catch(() => {});
   }, []);
-
-  function pollRepairStatus() {
-    api
-      .getRepairStatus()
-      .then((data) => {
-        setRepair(data);
-        if (data.running) {
-          setTimeout(pollRepairStatus, 3000);
-        }
-      })
-      .catch((err) => setRepairError(err.message));
-  }
-
-  async function startRepair() {
-    setRepairError("");
-    try {
-      await api.startImageRepair();
-      pollRepairStatus();
-    } catch (err) {
-      setRepairError(err.message);
-    }
-  }
 
   if (error) {
     return <div className="empty-state">{error}</div>;
@@ -60,35 +29,6 @@ export default function Dashboard() {
           <h1>Dashboard</h1>
           <p>An overview of your store right now.</p>
         </div>
-      </div>
-
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <h3 style={{ marginTop: 0 }}>Repair Migrated Images</h3>
-        <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 14 }}>
-          One-time fix for the original WordPress product photos that got corrupted
-          during the Azure migration. Safe to click more than once.
-        </p>
-
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={startRepair}
-          disabled={repair?.running}
-        >
-          {repair?.running ? "Repairing..." : "Repair Images"}
-        </button>
-
-        {repair && (
-          <p style={{ fontSize: 13, marginTop: 12, color: "var(--text-muted)" }}>
-            {repair.running
-              ? `In progress: ${repair.done} / ${repair.total} checked (${repair.fixed} fixed, ${repair.failed} failed so far)`
-              : repair.finishedAt
-              ? `Last run finished: ${repair.fixed} fixed, ${repair.failed} failed out of ${repair.total}.`
-              : null}
-          </p>
-        )}
-
-        {repairError && <div className="error-text">{repairError}</div>}
       </div>
 
       <div className="stat-grid">
