@@ -10,6 +10,8 @@ export default function OrderDetail() {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
   const [updating, setUpdating] = useState(false);
+  const [sendingToShipStation, setSendingToShipStation] = useState(false);
+  const [shipStationError, setShipStationError] = useState("");
 
   function load() {
     api
@@ -29,6 +31,27 @@ export default function OrderDetail() {
       alert(err.message);
     } finally {
       setUpdating(false);
+    }
+  }
+
+  async function handleSendToShipStation() {
+    setSendingToShipStation(true);
+    setShipStationError("");
+    try {
+      const result = await api.sendOrderToShipStation(id);
+      setOrder((prev) => ({
+        ...prev,
+        shipstation_order_id: result.shipstation_order_id,
+        shipstation_synced_at: result.shipstation_synced_at,
+        shipstation_sync_error: result.shipstation_sync_error
+      }));
+      if (result.shipstation_sync_error) {
+        setShipStationError(result.shipstation_sync_error);
+      }
+    } catch (err) {
+      setShipStationError(err.message);
+    } finally {
+      setSendingToShipStation(false);
     }
   }
 
@@ -120,6 +143,40 @@ export default function OrderDetail() {
           <p style={{ margin: "4px 0" }}>
             {order.city} {order.postal_code}
           </p>
+          <p style={{ margin: "4px 0" }}>{order.country || "Pakistan"}</p>
+
+          {order.country && order.country.toLowerCase() !== "pakistan" && (
+            <>
+              <h3>ShipStation</h3>
+
+              {order.shipstation_synced_at ? (
+                <p style={{ margin: "4px 0", color: "var(--text-muted)" }}>
+                  Sent {new Date(order.shipstation_synced_at).toLocaleString()}
+                  {order.shipstation_order_id && ` (ShipStation order #${order.shipstation_order_id})`}
+                </p>
+              ) : (
+                <p style={{ margin: "4px 0", color: "var(--text-muted)" }}>
+                  {order.shipstation_sync_error || "Not sent yet."}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleSendToShipStation}
+                disabled={sendingToShipStation}
+                style={{ marginTop: 6 }}
+              >
+                {sendingToShipStation
+                  ? "Sending..."
+                  : order.shipstation_synced_at
+                  ? "Resend to ShipStation"
+                  : "Send to ShipStation"}
+              </button>
+
+              {shipStationError && <div className="error-text">{shipStationError}</div>}
+            </>
+          )}
 
           {order.notes && (
             <>

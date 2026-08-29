@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const { BlobServiceClient } = require("@azure/storage-blob");
+const { sendOrderToShipStation } = require("./shipstation");
 const pool = require("./db");
 
 // ========================================
@@ -570,6 +571,51 @@ app.post("/api/create-payment-intent", async (req, res) => {
     }
 });
 
+// ========================================
+// SHIPSTATION SYNC
+// Runs AFTER an order's DB transaction has already committed (never as
+// part of it — an external API call is too slow/unreliable to hold a DB
+// transaction open for). Used both automatically (non-Pakistan orders,
+// right after checkout) and manually (admin panel "Resend to ShipStation"
+// button, for retrying a failed/skipped attempt).
+// ========================================
+async function syncOrderToShipStation(orderId) {
+    const orderResult = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
+    if (orderResult.rows.length === 0) return;
+    const order = orderResult.rows[0];
+
+    const itemsResult = await pool.query(
+        `SELECT product_id, product_name, price, quantity FROM order_items WHERE order_id = $1`,
+        [orderId]
+    );
+
+    try {
+        const result = await sendOrderToShipStation(order, itemsResult.rows);
+
+        if (result.success) {
+            await pool.query(
+                `UPDATE orders
+                 SET shipstation_order_id = $1, shipstation_synced_at = NOW(), shipstation_sync_error = NULL
+                 WHERE id = $2`,
+                [result.shipstationOrderId ? String(result.shipstationOrderId) : null, orderId]
+            );
+            console.log(`[shipstation] Order ${orderId} sent successfully.`);
+        } else {
+            await pool.query(
+                `UPDATE orders SET shipstation_sync_error = $1 WHERE id = $2`,
+                [result.message, orderId]
+            );
+            console.log(`[shipstation] Order ${orderId} skipped: ${result.message}`);
+        }
+    } catch (error) {
+        console.error(`[shipstation] Order ${orderId} failed:`, error.message);
+        await pool.query(
+            `UPDATE orders SET shipstation_sync_error = $1 WHERE id = $2`,
+            [error.message, orderId]
+        );
+    }
+}
+
 app.post("/api/orders", async (req, res) => {
 
     const { customer, items, subtotal, total, paymentMethod, paymentReference } = req.body;
@@ -646,6 +692,7 @@ app.post("/api/orders", async (req, res) => {
                 address,
                 city,
                 postal_code,
+                country,
                 notes,
                 subtotal,
                 total,
@@ -653,7 +700,7 @@ app.post("/api/orders", async (req, res) => {
                 payment_reference,
                 status
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
             RETURNING id
             `,
             [
@@ -663,6 +710,7 @@ app.post("/api/orders", async (req, res) => {
                 customer.address,
                 customer.city || null,
                 customer.postalCode || null,
+                (customer.country || "Pakistan").trim(),
                 customer.notes || null,
                 subtotal || 0,
                 total || subtotal || 0,
@@ -702,6 +750,16 @@ app.post("/api/orders", async (req, res) => {
             success: true,
             orderId: orderId
         });
+
+        // Non-Pakistan orders go to ShipStation automatically — done AFTER
+        // responding, in the background, so the customer's checkout is
+        // never slowed down by (or dependent on) ShipStation being up.
+        const orderCountry = (customer.country || "Pakistan").trim();
+        if (orderCountry.toLowerCase() !== "pakistan") {
+            syncOrderToShipStation(orderId).catch(error => {
+                console.error(`[shipstation] Unexpected error syncing order ${orderId}:`, error);
+            });
+        }
 
     } catch (error) {
 
@@ -1365,6 +1423,34 @@ app.get("/api/admin/orders/:id", requireAdminAuth, async (req, res) => {
     } catch (error) {
         console.error("Error fetching order:", error);
         res.status(500).json({ success: false, message: "Failed to fetch order" });
+    }
+
+});
+
+// Manual retry button (Order Detail page in the admin panel) — for a
+// non-Pakistan order whose automatic ShipStation send failed or was
+// skipped (e.g. because the API key wasn't set yet at the time).
+app.post("/api/admin/orders/:id/send-to-shipstation", requireAdminAuth, async (req, res) => {
+
+    try {
+        const orderResult = await pool.query(`SELECT id FROM orders WHERE id = $1`, [req.params.id]);
+
+        if (orderResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        await syncOrderToShipStation(req.params.id);
+
+        const updated = await pool.query(
+            `SELECT shipstation_order_id, shipstation_synced_at, shipstation_sync_error FROM orders WHERE id = $1`,
+            [req.params.id]
+        );
+
+        res.json({ success: true, ...updated.rows[0] });
+
+    } catch (error) {
+        console.error("Error sending order to ShipStation:", error);
+        res.status(500).json({ success: false, message: "Failed to send order to ShipStation" });
     }
 
 });

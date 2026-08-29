@@ -114,5 +114,7 @@ export const api = {
     request(`/admin/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status })
-    })
+    }),
+  sendOrderToShipStation: (id) =>
+    request(`/admin/orders/${id}/send-to-shipstation`, { method: "POST" })
 };
