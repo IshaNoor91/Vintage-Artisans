@@ -116,5 +116,12 @@ export const api = {
       body: JSON.stringify({ status })
     }),
   sendOrderToShipStation: (id) =>
-    request(`/admin/orders/${id}/send-to-shipstation`, { method: "POST" })
+    request(`/admin/orders/${id}/send-to-shipstation`, { method: "POST" }),
+
+  getShippingCountries: () => request("/admin/shipping-countries"),
+  updateShippingCountries: (enabledIds) =>
+    request("/admin/shipping-countries", {
+      method: "PUT",
+      body: JSON.stringify({ enabledIds })
+    })
 };

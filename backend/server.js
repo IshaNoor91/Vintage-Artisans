@@ -17,13 +17,33 @@ const stripe = require("stripe")(
 );
 
 const app = express();
+
+// Any localhost/127.0.0.1 port is allowed automatically (Live Server on
+// :5500, the Admin panel's Vite dev server, which bumps to a new port
+// like :5174 or :5175 whenever an earlier one is still running) — so a
+// busy port never breaks "Failed to fetch" on the admin login again.
+// Only the two live Netlify sites are separately allow-listed for
+// production.
+const PROD_ORIGINS = [
+    "https://cozy-trifle-37f6b4.netlify.app",
+    "https://vintage-artisans.netlify.app"
+];
+
 app.use(cors({
-    origin: [
-        "http://127.0.0.1:5500",
-        "http://localhost:5173",
-        "https://cozy-trifle-37f6b4.netlify.app",
-        "https://vintage-artisans.netlify.app"
-    ]
+    origin: (origin, callback) => {
+        // No Origin header at all (e.g. a server-to-server request) — allow.
+        if (!origin) return callback(null, true);
+
+        if (/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+            return callback(null, true);
+        }
+
+        if (PROD_ORIGINS.includes(origin)) {
+            return callback(null, true);
+        }
+
+        callback(new Error(`Not allowed by CORS: ${origin}`));
+    }
 }));
 
 app.use(express.json());
@@ -405,6 +425,35 @@ app.get("/api/categories", async (req, res) => {
         });
     }
 });
+// ========================================
+// SHIPPING COUNTRIES — public, enabled-only list for the checkout
+// Country dropdown (JS/checkout.js). Which countries are enabled is
+// configured from Admin -> Shipping Countries, never hardcoded here.
+// ========================================
+app.get("/api/shipping-countries", async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT name, code
+            FROM shipping_countries
+            WHERE enabled = true
+            ORDER BY (name = 'Pakistan') DESC, name ASC
+        `);
+
+        res.json({
+            success: true,
+            countries: result.rows
+        });
+
+    } catch (error) {
+        console.error("Error fetching shipping countries:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch shipping countries"
+        });
+    }
+});
+
 app.get("/api/products/price-range", async (req, res) => {
     try {
         const result = await pool.query(`
@@ -635,6 +684,35 @@ app.post("/api/orders", async (req, res) => {
     }
 
     // ========================================
+    // COUNTRY — must be one of the countries currently enabled in
+    // Admin -> Shipping Countries. Checked server-side too (not just in
+    // the checkout dropdown) so a request that bypasses the frontend
+    // can't create an order for a country we don't actually ship to.
+    // ========================================
+
+    const orderCountry = (customer.country || "Pakistan").trim();
+
+    try {
+        const countryCheck = await pool.query(
+            `SELECT 1 FROM shipping_countries WHERE name = $1 AND enabled = true`,
+            [orderCountry]
+        );
+
+        if (countryCheck.rows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Sorry, we don't currently ship to "${orderCountry}".`
+            });
+        }
+    } catch (error) {
+        console.error("Error checking shipping country:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not verify shipping country"
+        });
+    }
+
+    // ========================================
     // PAYMENT METHOD
     // ========================================
 
@@ -710,7 +788,7 @@ app.post("/api/orders", async (req, res) => {
                 customer.address,
                 customer.city || null,
                 customer.postalCode || null,
-                (customer.country || "Pakistan").trim(),
+                orderCountry,
                 customer.notes || null,
                 subtotal || 0,
                 total || subtotal || 0,
@@ -754,7 +832,6 @@ app.post("/api/orders", async (req, res) => {
         // Non-Pakistan orders go to ShipStation automatically — done AFTER
         // responding, in the background, so the customer's checkout is
         // never slowed down by (or dependent on) ShipStation being up.
-        const orderCountry = (customer.country || "Pakistan").trim();
         if (orderCountry.toLowerCase() !== "pakistan") {
             syncOrderToShipStation(orderId).catch(error => {
                 console.error(`[shipstation] Unexpected error syncing order ${orderId}:`, error);
@@ -1367,6 +1444,59 @@ app.delete("/api/admin/categories/:id", requireAdminAuth, async (req, res) => {
     } catch (error) {
         console.error("Error deleting category:", error);
         res.status(500).json({ success: false, message: "Failed to delete category" });
+    }
+
+});
+
+
+// ========================================================
+// ============  ADMIN: SHIPPING COUNTRIES  =================
+// ========================================================
+// Powers Admin -> Shipping Countries, where every country ShipStation
+// knows how to map to a code (see country-codes.js) can be turned on/off
+// for the checkout dropdown with a checkbox — nothing about which
+// countries we ship to is hardcoded in the frontend.
+
+app.get("/api/admin/shipping-countries", requireAdminAuth, async (req, res) => {
+
+    try {
+        const result = await pool.query(`
+            SELECT id, name, code, enabled
+            FROM shipping_countries
+            ORDER BY name ASC
+        `);
+
+        res.json({ success: true, countries: result.rows });
+
+    } catch (error) {
+        console.error("Error fetching admin shipping countries:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch shipping countries" });
+    }
+
+});
+
+// Body: { enabledIds: [1, 5, 12, ...] } — every id in the array becomes
+// enabled, every other row becomes disabled. One statement, so the
+// checkbox list always ends up matching exactly what was saved.
+app.put("/api/admin/shipping-countries", requireAdminAuth, async (req, res) => {
+
+    const { enabledIds } = req.body;
+
+    if (!Array.isArray(enabledIds) || !enabledIds.every(id => Number.isInteger(id))) {
+        return res.status(400).json({ success: false, message: "enabledIds must be an array of ids" });
+    }
+
+    try {
+        await pool.query(
+            `UPDATE shipping_countries SET enabled = (id = ANY($1::int[]))`,
+            [enabledIds]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error updating shipping countries:", error);
+        res.status(500).json({ success: false, message: "Failed to update shipping countries" });
     }
 
 });

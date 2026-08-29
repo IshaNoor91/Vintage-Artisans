@@ -5,16 +5,32 @@ const CART_KEY = "vintageArtisansCart";
 
 const API_BASE = "https://vintage-artisans-production.up.railway.app/api";
 
-// Only shipping to these two countries for now. Pakistan orders ship
-// locally; a UK order gets sent to ShipStation automatically once the
-// order is placed (see backend server.js). IMPORTANT: these names must
-// match, character for character, the keys in backend/country-codes.js
-// — that's how the backend turns "United Kingdom" into the "GB" code
-// ShipStation needs. To ship to more countries later, add the name here
-// AND confirm it already exists in backend/country-codes.js.
-const COUNTRIES = ["Pakistan", "United Kingdom"];
-
 const container = document.getElementById("checkout-container");
+
+// Which countries appear in the dropdown below is fully configurable from
+// Admin -> Shipping Countries — never hardcoded here. Pakistan orders ship
+// locally; any other enabled country gets sent to ShipStation automatically
+// once the order is placed (see backend server.js).
+async function loadShippingCountries() {
+
+    try {
+
+        const response = await fetch(`${API_BASE}/shipping-countries`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.countries) && data.countries.length > 0) {
+            return data.countries; // [{ name, code }, ...]
+        }
+
+    } catch (error) {
+        console.error("Failed to load shipping countries:", error);
+    }
+
+    // Fallback so checkout never breaks if the API/table isn't reachable —
+    // Pakistan is always safe to offer since it's shipped locally.
+    return [{ name: "Pakistan", code: "PK" }];
+
+}
 
 // ========================================
 // STRIPE CONFIG
@@ -57,7 +73,7 @@ function clearCart() {
 // RENDER CHECKOUT
 // ========================================
 
-function renderCheckout() {
+function renderCheckout(countries) {
 
     const cart = getCart();
 
@@ -153,7 +169,7 @@ function renderCheckout() {
                     <div class="form-group">
                         <label for="country">Country</label>
                         <select id="country" name="country" required>
-                            ${COUNTRIES.map(c => `<option value="${c}"${c === "Pakistan" ? " selected" : ""}>${c}</option>`).join("")}
+                            ${countries.map(c => `<option value="${c.name}"${c.name === "Pakistan" ? " selected" : ""}>${c.name}</option>`).join("")}
                         </select>
                     </div>
 
@@ -500,4 +516,9 @@ function renderConfirmation(orderId, paymentMethod) {
 }
 
 
-document.addEventListener("DOMContentLoaded", renderCheckout);
+async function init() {
+    const countries = await loadShippingCountries();
+    renderCheckout(countries);
+}
+
+document.addEventListener("DOMContentLoaded", init);

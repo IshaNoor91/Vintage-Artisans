@@ -82,7 +82,7 @@ body{
         #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%);
 }
 .footer-social .social-email    { background: #262626; }
-.footer-social .social-linkedin { background: #5b4b8a; } /* purple to roughly match your reference image — swap to #0A66C2 for LinkedIn's real brand blue if you'd rather be accurate */
+.footer-social .social-linkedin { background: var(--secondary); } /* back to the site's pink accent color */
 .footer-social .social-youtube  { background: #FF0000; }
 
 nav{
@@ -3004,9 +3004,14 @@ color:var(--heading-color);
 ============================================ */
 
 .all-categories-section {
+    background: var(--secondary);
+    padding: 60px 0;
+}
+
+.all-categories-section .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 60px 24px;
+    padding: 0 24px;
 }
 
 .all-categories-section h2 {

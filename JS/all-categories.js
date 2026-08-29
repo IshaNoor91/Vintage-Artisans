@@ -1,68 +1,98 @@
+console.log("ALL-CATEGORIES JS LOADED");
+
 const API_BASE_CATS = "https://vintage-artisans-production.up.railway.app/api";
 
-const PRODUCT_CATEGORIES = [
-    "Dinner Sets", "Tea Sets", "Serving Dishes", "Plates & Platters", "Bowls",
-    "Blue Pottery Karahies", "Handies & Cover Pots", "Pottery Jars", "Tea Mugs",
-    "Tea Coasters", "Planters", "Vases", "Wall Hangings", "Aromatic Warmers",
-    "Table Decorations", "Camel Skin Lamps"
-];
-
-const DESIGN_CATEGORIES = [
-    "Blue Felicity", "Blue Pattern", "Blue Flower", "Tranquility", "Serina Blue",
-    "Blue Celico", "Spring Pattern", "Breeze Blue", "Green Flower", "Jungle Flower",
-    "Kashmir Multi", "Ocean Blue", "Urban Blue", "Antique", "Islamic Calligraphy",
-    "Women Art", "Light Serina Blue"
-];
-
-function normalize(name) {
-    return name.trim().toLowerCase();
+// Show only the last segment of a "Parent > Child" category name
+// (e.g. "Blue Pottery > Bowls" -> "Bowls"). Top-level categories like
+// "Blue Pottery" or "Blue Felicity" have no ">" and are shown as-is.
+function getDisplayName(name) {
+    return name.split(">").map(part => part.trim()).pop();
 }
 
-function renderTiles(containerId, names, categoryLookup) {
+// Grab the first product image for a category so the tile isn't blank.
+// The categories table itself has no image field, so the image always
+// comes from a real product inside that category ("koi bhi product ki
+// image" — any product's image).
+async function getCategoryImage(slug) {
+
+    try {
+
+        const response = await fetch(`${API_BASE_CATS}/products/category/${slug}`);
+
+        if (!response.ok) return "";
+
+        const data = await response.json();
+
+        if (!data.success || !data.products || data.products.length === 0) {
+            return "";
+        }
+
+        const firstProduct = data.products[0];
+
+        return firstProduct.images
+            ? firstProduct.images.split(",")[0].trim()
+            : "";
+
+    } catch (error) {
+
+        console.error(`Failed to load image for category "${slug}":`, error);
+        return "";
+
+    }
+
+}
+
+// Fetch categories, then fetch a representative image for each one in
+// parallel, then render all the tiles at once.
+async function loadCategoryGrid(containerId, type) {
+
     const container = document.getElementById(containerId);
+    if (!container) return;
 
-    container.innerHTML = names.map(name => {
-        const match = categoryLookup.get(normalize(name));
+    try {
 
-        if (match) {
-            const image = match.images ? match.images.split(",")[0].trim() : "";
+        const response = await fetch(`${API_BASE_CATS}/categories?type=${type}`);
+        const data = await response.json();
+
+        if (!data.success || !data.categories || data.categories.length === 0) {
+            container.innerHTML = `<p>No categories found.</p>`;
+            return;
+        }
+
+        const categories = data.categories;
+
+        const images = await Promise.all(
+            categories.map(cat => getCategoryImage(cat.slug))
+        );
+
+        container.innerHTML = categories.map((cat, index) => {
+
+            const name = getDisplayName(cat.name);
+            const image = images[index];
+
             return `
-                <a href="category.html?slug=${match.slug}" class="category-tile">
+                <a href="category.html?slug=${cat.slug}" class="category-tile">
                     <div class="category-tile-image">
-                        ${image ? `<img src="${image}" alt="${name}">` : `<i class="fa-solid fa-shapes"></i>`}
+                        ${image ? `<img src="${image}" alt="${name}" loading="lazy">` : `<i class="fa-solid fa-shapes"></i>`}
                     </div>
                     <span>${name}</span>
                 </a>
             `;
-        }
 
-        return `
-            <div class="category-tile disabled">
-                <div class="category-tile-image"><i class="fa-solid fa-hourglass-half"></i></div>
-                <span>${name}</span>
-            </div>
-        `;
-    }).join("");
-}
-
-async function loadCategories() {
-    try {
-        const response = await fetch(`${API_BASE_CATS}/categories`);
-        const data = await response.json();
-        const categories = data.success ? data.categories : [];
-
-        const lookup = new Map();
-        categories.forEach(cat => {
-            const parts = cat.name.split(">").map(p => p.trim());
-            lookup.set(normalize(parts[parts.length - 1]), cat);
-        });
-
-        renderTiles("product-categories-grid", PRODUCT_CATEGORIES, lookup);
-        renderTiles("design-categories-grid", DESIGN_CATEGORIES, lookup);
+        }).join("");
 
     } catch (error) {
-        console.error("Failed to load categories:", error);
+
+        console.error(`Failed to load "${type}" categories:`, error);
+        container.innerHTML = `<p>Unable to load categories.</p>`;
+
     }
+
 }
 
-document.addEventListener("DOMContentLoaded", loadCategories);
+function loadAllCategoryGrids() {
+    loadCategoryGrid("product-categories-grid", "product");
+    loadCategoryGrid("design-categories-grid", "design");
+}
+
+document.addEventListener("DOMContentLoaded", loadAllCategoryGrids);

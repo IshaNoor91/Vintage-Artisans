@@ -6,7 +6,8 @@ const LINKS = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/products", label: "Products" },
   { to: "/categories", label: "Categories" },
-  { to: "/orders", label: "Orders" }
+  { to: "/orders", label: "Orders" },
+  { to: "/shipping-countries", label: "Shipping Countries" }
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
