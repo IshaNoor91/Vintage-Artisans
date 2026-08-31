@@ -123,5 +123,16 @@ export const api = {
     request("/admin/shipping-countries", {
       method: "PUT",
       body: JSON.stringify({ enabledIds })
+    }),
+
+  getShipStationCarriers: () => request("/admin/shipstation/carriers"),
+  getShipStationServices: (carrierCode) =>
+    request(`/admin/shipstation/carriers/${encodeURIComponent(carrierCode)}/services`),
+  getShipStationPackages: (carrierCode) =>
+    request(`/admin/shipstation/carriers/${encodeURIComponent(carrierCode)}/packages`),
+  purchaseShippingLabel: (orderId, payload) =>
+    request(`/admin/orders/${orderId}/purchase-label`, {
+      method: "POST",
+      body: JSON.stringify(payload)
     })
 };

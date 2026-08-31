@@ -21,15 +21,24 @@ function isConfigured() {
     return Boolean(process.env.SHIPSTATION_API_KEY && process.env.SHIPSTATION_API_SECRET);
 }
 
+function authHeader() {
+    const auth = Buffer.from(
+        `${process.env.SHIPSTATION_API_KEY}:${process.env.SHIPSTATION_API_SECRET}`
+    ).toString("base64");
+    return `Basic ${auth}`;
+}
+
+const NOT_CONFIGURED_RESULT = {
+    success: false,
+    skipped: true,
+    message: "ShipStation isn't connected yet (API key/secret not set)."
+};
+
 // order: a row from the `orders` table.
 // items: rows from `order_items` for that order.
 async function sendOrderToShipStation(order, items) {
     if (!isConfigured()) {
-        return {
-            success: false,
-            skipped: true,
-            message: "ShipStation isn't connected yet (API key/secret not set)."
-        };
+        return NOT_CONFIGURED_RESULT;
     }
 
     const countryCode = countryCodes[order.country];
@@ -70,15 +79,11 @@ async function sendOrderToShipStation(order, items) {
         orderTotal: Number(order.total)
     };
 
-    const auth = Buffer.from(
-        `${process.env.SHIPSTATION_API_KEY}:${process.env.SHIPSTATION_API_SECRET}`
-    ).toString("base64");
-
     const response = await fetch(`${SHIPSTATION_BASE_URL}/orders/createorder`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Basic ${auth}`
+            "Authorization": authHeader()
         },
         body: JSON.stringify(payload)
     });
@@ -97,4 +102,160 @@ async function sendOrderToShipStation(order, items) {
     };
 }
 
-module.exports = { sendOrderToShipStation, isConfigured };
+/* ============================================================
+   LABEL PURCHASE — the part of ShipStation this project hadn't
+   used yet: buying an actual shipping label (and getting a
+   tracking number back) for an order that's already been created
+   in ShipStation via sendOrderToShipStation() above.
+
+   Nothing about which carrier/service/package to use is hardcoded
+   here — listCarriers/listCarrierServices/listCarrierPackages let
+   the admin panel ask ShipStation itself what's available (only
+   carriers actually connected in the ShipStation account will show
+   up), matching the "nothing hardcoded" rule used for shipping
+   countries too.
+   ============================================================ */
+
+// Every carrier account connected in the ShipStation account
+// (Settings -> Shipping -> Carriers). Empty array is normal if none
+// are connected yet — the admin panel should say so, not error.
+async function listCarriers() {
+    if (!isConfigured()) return NOT_CONFIGURED_RESULT;
+
+    const response = await fetch(`${SHIPSTATION_BASE_URL}/carriers`, {
+        headers: { "Authorization": authHeader() }
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = (data && (data.Message || data.message)) || `ShipStation responded with HTTP ${response.status}`;
+        throw new Error(message);
+    }
+
+    return { success: true, carriers: Array.isArray(data) ? data : [] };
+}
+
+// The shipping services (e.g. "USPS Priority Mail") a given carrier
+// code offers.
+async function listCarrierServices(carrierCode) {
+    if (!isConfigured()) return NOT_CONFIGURED_RESULT;
+
+    const response = await fetch(
+        `${SHIPSTATION_BASE_URL}/carriers/listservices?carrierCode=${encodeURIComponent(carrierCode)}`,
+        { headers: { "Authorization": authHeader() } }
+    );
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = (data && (data.Message || data.message)) || `ShipStation responded with HTTP ${response.status}`;
+        throw new Error(message);
+    }
+
+    return { success: true, services: Array.isArray(data) ? data : [] };
+}
+
+// The predefined package sizes (e.g. "Flat Rate Envelope") a given
+// carrier code offers. Optional to use — plenty of services just need
+// a weight, no specific package code.
+async function listCarrierPackages(carrierCode) {
+    if (!isConfigured()) return NOT_CONFIGURED_RESULT;
+
+    const response = await fetch(
+        `${SHIPSTATION_BASE_URL}/carriers/listpackages?carrierCode=${encodeURIComponent(carrierCode)}`,
+        { headers: { "Authorization": authHeader() } }
+    );
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = (data && (data.Message || data.message)) || `ShipStation responded with HTTP ${response.status}`;
+        throw new Error(message);
+    }
+
+    return { success: true, packages: Array.isArray(data) ? data : [] };
+}
+
+// shipstationOrderId: the numeric id ShipStation assigned when the order
+// was created (stored on our order as shipstation_order_id) — NOT our
+// own order id.
+async function purchaseLabelForOrder(shipstationOrderId, {
+    carrierCode,
+    serviceCode,
+    packageCode,
+    weightValue,
+    weightUnits,
+    testLabel
+}) {
+    if (!isConfigured()) return NOT_CONFIGURED_RESULT;
+
+    if (!shipstationOrderId) {
+        return {
+            success: false,
+            skipped: true,
+            message: "This order hasn't been sent to ShipStation yet — send it there first."
+        };
+    }
+
+    if (!carrierCode || !serviceCode) {
+        return {
+            success: false,
+            skipped: true,
+            message: "Carrier and service are required to purchase a label."
+        };
+    }
+
+    const payload = {
+        orderId: Number(shipstationOrderId),
+        carrierCode,
+        serviceCode,
+        packageCode: packageCode || undefined,
+        confirmation: "none",
+        weight: {
+            value: Number(weightValue) > 0 ? Number(weightValue) : 1,
+            units: weightUnits || "pounds"
+        },
+        // Test labels don't actually get purchased/charged — useful for
+        // trying this out before relying on it for a real order.
+        testLabel: Boolean(testLabel)
+    };
+
+    const response = await fetch(`${SHIPSTATION_BASE_URL}/orders/createlabelfororder`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": authHeader()
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = (data && (data.Message || data.message)) || `ShipStation responded with HTTP ${response.status}`;
+        throw new Error(message);
+    }
+
+    return {
+        success: true,
+        trackingNumber: data && data.trackingNumber,
+        shipmentId: data && data.shipmentId,
+        shipmentCost: data && data.shipmentCost,
+        insuranceCost: data && data.insuranceCost,
+        // Base64-encoded PDF — the caller uploads this somewhere
+        // viewable (this project uploads it to the same Azure Blob
+        // Storage container product images already use) rather than
+        // storing the raw base64 in the database.
+        labelBase64: data && data.labelData
+    };
+}
+
+module.exports = {
+    sendOrderToShipStation,
+    isConfigured,
+    listCarriers,
+    listCarrierServices,
+    listCarrierPackages,
+    purchaseLabelForOrder
+};

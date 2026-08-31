@@ -4,7 +4,13 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const { BlobServiceClient } = require("@azure/storage-blob");
-const { sendOrderToShipStation } = require("./shipstation");
+const {
+    sendOrderToShipStation,
+    listCarriers,
+    listCarrierServices,
+    listCarrierPackages,
+    purchaseLabelForOrder
+} = require("./shipstation");
 const pool = require("./db");
 
 // ========================================
@@ -1581,6 +1587,139 @@ app.post("/api/admin/orders/:id/send-to-shipstation", requireAdminAuth, async (r
     } catch (error) {
         console.error("Error sending order to ShipStation:", error);
         res.status(500).json({ success: false, message: "Failed to send order to ShipStation" });
+    }
+
+});
+
+// ========================================================
+// ============  ADMIN: SHIPSTATION LABELS  =================
+// ========================================================
+// Lets the admin panel ask ShipStation itself which carriers/services/
+// packages are available (only carriers actually connected in the
+// ShipStation account come back) instead of hardcoding any of it, then
+// buy an actual shipping label + get a tracking number for an order
+// that's already been sent to ShipStation.
+
+app.get("/api/admin/shipstation/carriers", requireAdminAuth, async (req, res) => {
+    try {
+        const result = await listCarriers();
+
+        if (!result.success) {
+            return res.status(400).json({ success: false, message: result.message });
+        }
+
+        res.json({ success: true, carriers: result.carriers });
+
+    } catch (error) {
+        console.error("Error fetching ShipStation carriers:", error);
+        res.status(500).json({ success: false, message: error.message || "Failed to fetch carriers" });
+    }
+});
+
+app.get("/api/admin/shipstation/carriers/:code/services", requireAdminAuth, async (req, res) => {
+    try {
+        const result = await listCarrierServices(req.params.code);
+
+        if (!result.success) {
+            return res.status(400).json({ success: false, message: result.message });
+        }
+
+        res.json({ success: true, services: result.services });
+
+    } catch (error) {
+        console.error("Error fetching ShipStation services:", error);
+        res.status(500).json({ success: false, message: error.message || "Failed to fetch services" });
+    }
+});
+
+app.get("/api/admin/shipstation/carriers/:code/packages", requireAdminAuth, async (req, res) => {
+    try {
+        const result = await listCarrierPackages(req.params.code);
+
+        if (!result.success) {
+            return res.status(400).json({ success: false, message: result.message });
+        }
+
+        res.json({ success: true, packages: result.packages });
+
+    } catch (error) {
+        console.error("Error fetching ShipStation packages:", error);
+        res.status(500).json({ success: false, message: error.message || "Failed to fetch packages" });
+    }
+});
+
+// Buys the actual label (real charge unless testLabel is true) and
+// stores the tracking number + a public link to the label PDF back on
+// the order.
+app.post("/api/admin/orders/:id/purchase-label", requireAdminAuth, async (req, res) => {
+
+    const orderId = req.params.id;
+    const { carrierCode, serviceCode, packageCode, weightValue, weightUnits, testLabel } = req.body;
+
+    try {
+        const orderResult = await pool.query(
+            `SELECT shipstation_order_id FROM orders WHERE id = $1`,
+            [orderId]
+        );
+
+        if (orderResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        const shipstationOrderId = orderResult.rows[0].shipstation_order_id;
+
+        const result = await purchaseLabelForOrder(shipstationOrderId, {
+            carrierCode, serviceCode, packageCode, weightValue, weightUnits, testLabel
+        });
+
+        if (!result.success) {
+            return res.status(400).json({ success: false, message: result.message });
+        }
+
+        // Upload the label PDF to the same Azure Blob Storage container
+        // product images already use, so the admin gets a plain public
+        // link instead of a base64 blob sitting in the database.
+        let labelUrl = null;
+
+        if (result.labelBase64 && azureContainerClient) {
+            const buffer = Buffer.from(result.labelBase64, "base64");
+            const blobName = `labels/order-${orderId}-${Date.now()}.pdf`;
+            const blockBlobClient = azureContainerClient.getBlockBlobClient(blobName);
+
+            await blockBlobClient.uploadData(buffer, {
+                blobHTTPHeaders: { blobContentType: "application/pdf" }
+            });
+
+            labelUrl = blockBlobClient.url;
+        }
+
+        await pool.query(
+            `
+            UPDATE orders
+            SET tracking_number = $1, label_url = $2, shipping_cost = $3,
+                carrier_code = $4, service_code = $5
+            WHERE id = $6
+            `,
+            [
+                result.trackingNumber || null,
+                labelUrl,
+                result.shipmentCost ?? null,
+                carrierCode,
+                serviceCode,
+                orderId
+            ]
+        );
+
+        res.json({
+            success: true,
+            trackingNumber: result.trackingNumber,
+            labelUrl,
+            shippingCost: result.shipmentCost
+        });
+
+    } catch (error) {
+        console.error("Error purchasing shipping label:", error);
+        res.status(500).json({ success: false, message: error.message || "Failed to purchase shipping label" });
     }
 
 });
