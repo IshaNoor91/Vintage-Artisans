@@ -101,6 +101,9 @@ function renderCart() {
 
     let subtotal = 0;
 
+    // All items in a cart share one currency — they were all priced for
+    // the same visitor in the same browsing session.
+    const cartCurrency = cart[0] && cart[0].currency ? cart[0].currency : "PKR";
 
     let itemsHTML = "";
 
@@ -156,8 +159,7 @@ function renderCart() {
 
                         <p class="cart-item-price">
 
-                            Rs.
-                            ${price.toFixed(2)}
+                            ${formatPrice(price, item.currency)}
 
                         </p>
 
@@ -197,8 +199,7 @@ function renderCart() {
 
                             Total:
                             <strong>
-                                Rs.
-                                ${itemTotal.toFixed(2)}
+                                ${formatPrice(itemTotal, item.currency)}
                             </strong>
 
                         </p>
@@ -256,8 +257,7 @@ function renderCart() {
                     </span>
 
                     <strong>
-                        Rs.
-                        ${subtotal.toFixed(2)}
+                        ${formatPrice(subtotal, cartCurrency)}
                     </strong>
 
                 </div>
@@ -286,8 +286,7 @@ function renderCart() {
                     </span>
 
                     <strong>
-                        Rs.
-                        ${subtotal.toFixed(2)}
+                        ${formatPrice(subtotal, cartCurrency)}
                     </strong>
 
                 </div>

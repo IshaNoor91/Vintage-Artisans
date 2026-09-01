@@ -438,11 +438,11 @@ function loadCategoryProducts() {
                         <div class="product-price">
 
                             <span class="sale-price">
-                                Rs. ${product.sale_price}
+                                ${formatPrice(product.sale_price, product.currency)}
                             </span>
 
                             <span class="regular-price">
-                                Rs. ${product.regular_price}
+                                ${formatPrice(product.regular_price, product.currency)}
                             </span>
 
                         </div>
@@ -453,8 +453,7 @@ function loadCategoryProducts() {
 
                     const price =
                         product.regular_price ||
-                        product.sale_price ||
-                        "Price unavailable";
+                        product.sale_price;
 
 
                     priceHTML = `
@@ -462,7 +461,7 @@ function loadCategoryProducts() {
                         <div class="product-price">
 
                             <span class="sale-price">
-                                Rs. ${price}
+                                ${formatPrice(price, product.currency)}
                             </span>
 
                         </div>

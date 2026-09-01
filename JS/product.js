@@ -242,11 +242,11 @@ function displayProduct(product) {
         productPrice.innerHTML = `
 
             <span class="sale-price">
-                Rs. ${salePrice.toFixed(2)}
+                ${formatPrice(salePrice, product.currency)}
             </span>
 
             <span class="regular-price">
-                Rs. ${regularPrice.toFixed(2)}
+                ${formatPrice(regularPrice, product.currency)}
             </span>
 
         `;
@@ -261,11 +261,7 @@ function displayProduct(product) {
         productPrice.innerHTML = `
 
             <span class="sale-price">
-                ${
-                    price
-                        ? `Rs. ${price.toFixed(2)}`
-                        : "Price unavailable"
-                }
+                ${formatPrice(price || null, product.currency)}
             </span>
 
         `;
@@ -839,6 +835,8 @@ function addProductToCart(
                     0
                 ),
 
+            currency: product.currency || "PKR",
+
             image: image,
 
             quantity: quantity
@@ -1191,11 +1189,11 @@ function renderRelatedProducts(
                 priceHTML = `
 
                     <span class="sale-price">
-                        Rs. ${sale.toFixed(2)}
+                        ${formatPrice(sale, product.currency)}
                     </span>
 
                     <span class="regular-price">
-                        Rs. ${regular.toFixed(2)}
+                        ${formatPrice(regular, product.currency)}
                     </span>
 
                 `;
@@ -1205,11 +1203,7 @@ function renderRelatedProducts(
                 priceHTML = `
 
                     <span class="sale-price">
-                        Rs. ${
-                            regular ||
-                            sale ||
-                            "Price unavailable"
-                        }
+                        ${formatPrice(regular || sale || null, product.currency)}
                     </span>
 
                 `;

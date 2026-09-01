@@ -12,6 +12,8 @@ const {
     purchaseLabelForOrder
 } = require("./shipstation");
 const pool = require("./db");
+const { getClientIP, getCountryFromIP } = require("./geolocation");
+const { resolveProductPrices } = require("./pricing");
 
 // ========================================
 // STRIPE
@@ -116,6 +118,40 @@ function requireAdminAuth(req, res, next) {
 
 
 const PORT = process.env.PORT || 3000;
+
+// ========================================
+// LOCATION-BASED PRICING
+// Works out which country a request is coming from — an explicit
+// ?country=XX query param wins (used for testing, or a future manual
+// currency switcher), otherwise it's detected from the request's IP.
+// Never throws: returns null if detection fails, and every caller
+// treats null the same as Pakistan/PKR (see pricing.js).
+// ========================================
+async function resolveRequestCountry(req) {
+    if (req.query.country && /^[A-Za-z]{2}$/.test(req.query.country)) {
+        return req.query.country.toUpperCase();
+    }
+
+    try {
+        const ip = getClientIP(req);
+        return await getCountryFromIP(ip);
+    } catch (error) {
+        console.error("[pricing] Country detection failed:", error.message);
+        return null;
+    }
+}
+
+// Public — lets the frontend show "Prices shown in GBP" style messaging
+// if it wants to, without duplicating the IP-detection logic itself.
+app.get("/api/detect-location", async (req, res) => {
+    try {
+        const countryCode = await resolveRequestCountry(req);
+        res.json({ success: true, countryCode: countryCode || null });
+    } catch (error) {
+        console.error("Error detecting location:", error);
+        res.json({ success: true, countryCode: null });
+    }
+});
 
 app.get("/", (req, res) => {
     res.send("Vintage Artisans backend is running!");
@@ -239,13 +275,21 @@ app.get("/api/products", async (req, res) => {
 
         const total = parseInt(countResult.rows[0].total, 10);
 
+        // Filtering/sorting above happens in PKR (min/max price bounds
+        // and "price-asc"/"price-desc" all come from the price-range
+        // slider, which is PKR-denominated) — converting AFTER doesn't
+        // change sort order (currency conversion is just multiplying by
+        // a positive number), it only changes what price is displayed.
+        const countryCode = await resolveRequestCountry(req);
+        const products = await resolveProductPrices(productsResult.rows, countryCode);
+
         res.json({
             success: true,
             page: page,
             limit: limit,
             total: total,
             totalPages: Math.ceil(total / limit),
-            products: productsResult.rows
+            products: products
         });
 
     } catch (error) {
@@ -317,13 +361,17 @@ app.get("/api/products", async (req, res) => {
     `,
     params
 );
-       res.json({
+
+        const countryCode = await resolveRequestCountry(req);
+        const products = await resolveProductPrices(result.rows, countryCode);
+
+        res.json({
     success: true,
     category: result.rows.length > 0
         ? result.rows[0].category_name
         : slug,
     count: result.rows.length,
-    products: result.rows
+    products: products
 });
     } catch (error) {
         console.error("Error fetching category products:", error);
@@ -381,9 +429,12 @@ app.get("/api/search", async (req, res) => {
             [likeTerm]
         );
 
+        const countryCode = await resolveRequestCountry(req);
+        const products = await resolveProductPrices(productsResult.rows, countryCode);
+
         res.json({
             success: true,
-            products: productsResult.rows,
+            products: products,
             categories: categoriesResult.rows
         });
 
@@ -566,10 +617,13 @@ app.get("/api/products/:id", async (req, res) => {
             [productId]
         );
 
+        const countryCode = await resolveRequestCountry(req);
+        const [resolvedProduct] = await resolveProductPrices([product], countryCode);
+
         res.json({
             success: true,
             product: {
-                ...product,
+                ...resolvedProduct,
                 categories: categoryResult.rows,
                 variations: variationResult.rows
             }
@@ -1175,15 +1229,28 @@ app.get("/api/admin/repair-images", requireAdminAuth, (req, res) => {
 // ============  ADMIN: PRODUCTS CRUD  =====================
 // ========================================================
 
-// Full list for the admin table (published + unpublished, no pagination limit games)
+// Full list for the admin table (published + unpublished, no pagination limit games).
+// price_overrides comes back as { "GB": { "regularPrice": 120, "salePrice": null }, ... }
+// so the Products page can show one editable price column per enabled
+// shipping country without a separate request per product.
 app.get("/api/admin/products", requireAdminAuth, async (req, res) => {
 
     try {
         const result = await pool.query(`
-            SELECT id, sku, name, product_type, regular_price, sale_price,
-                   stock, in_stock, images, published, featured
-            FROM products
-            ORDER BY id DESC
+            SELECT
+                p.id, p.sku, p.name, p.product_type, p.regular_price, p.sale_price,
+                p.stock, p.in_stock, p.images, p.published, p.featured,
+                COALESCE(
+                    json_object_agg(o.country_code, json_build_object(
+                        'regularPrice', o.regular_price,
+                        'salePrice', o.sale_price
+                    )) FILTER (WHERE o.country_code IS NOT NULL),
+                    '{}'
+                ) AS price_overrides
+            FROM products p
+            LEFT JOIN product_price_overrides o ON o.product_id = p.id
+            GROUP BY p.id
+            ORDER BY p.id DESC
         `);
 
         res.json({ success: true, products: result.rows });
@@ -1191,6 +1258,46 @@ app.get("/api/admin/products", requireAdminAuth, async (req, res) => {
     } catch (error) {
         console.error("Error fetching admin products:", error);
         res.status(500).json({ success: false, message: "Failed to fetch products" });
+    }
+
+});
+
+// Upserts (or clears) one product's price override for one country.
+// Body: { countryCode, regularPrice, salePrice } — regularPrice: null
+// deletes the override for that country (falls back to live conversion).
+app.put("/api/admin/products/:id/price-overrides", requireAdminAuth, async (req, res) => {
+
+    const productId = req.params.id;
+    const { countryCode, regularPrice, salePrice } = req.body;
+
+    if (!countryCode || !/^[A-Za-z]{2}$/.test(countryCode)) {
+        return res.status(400).json({ success: false, message: "A valid 2-letter countryCode is required" });
+    }
+
+    try {
+        if (regularPrice === null || regularPrice === undefined || regularPrice === "") {
+            await pool.query(
+                `DELETE FROM product_price_overrides WHERE product_id = $1 AND country_code = $2`,
+                [productId, countryCode.toUpperCase()]
+            );
+            return res.json({ success: true, cleared: true });
+        }
+
+        await pool.query(
+            `
+            INSERT INTO product_price_overrides (product_id, country_code, regular_price, sale_price)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (product_id, country_code)
+            DO UPDATE SET regular_price = EXCLUDED.regular_price, sale_price = EXCLUDED.sale_price
+            `,
+            [productId, countryCode.toUpperCase(), regularPrice, salePrice || null]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error saving price override:", error);
+        res.status(500).json({ success: false, message: "Failed to save price override" });
     }
 
 });

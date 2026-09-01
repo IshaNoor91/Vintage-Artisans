@@ -337,11 +337,11 @@ function displayProducts(products) {
                 <div class="product-price">
 
                     <span class="sale-price">
-                        Rs. ${product.sale_price}
+                        ${formatPrice(product.sale_price, product.currency)}
                     </span>
 
                     <span class="regular-price">
-                        Rs. ${product.regular_price}
+                        ${formatPrice(product.regular_price, product.currency)}
                     </span>
 
                 </div>
@@ -355,13 +355,7 @@ function displayProducts(products) {
                 <div class="product-price">
 
                     <span class="sale-price">
-
-                        Rs. ${
-                            product.regular_price ||
-                            product.sale_price ||
-                            "Price unavailable"
-                        }
-
+                        ${formatPrice(product.regular_price || product.sale_price, product.currency)}
                     </span>
 
                 </div>

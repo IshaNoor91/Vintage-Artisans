@@ -134,5 +134,14 @@ export const api = {
     request(`/admin/orders/${orderId}/purchase-label`, {
       method: "POST",
       body: JSON.stringify(payload)
+    }),
+
+  // countryCode: 2-letter ISO code (e.g. "GB"). Pass regularPrice: null to
+  // clear an override — the product then falls back to live currency
+  // conversion for that country again.
+  updateProductPriceOverride: (productId, payload) =>
+    request(`/admin/products/${productId}/price-overrides`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
     })
 };

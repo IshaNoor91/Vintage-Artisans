@@ -101,6 +101,10 @@ function renderCheckout(countries) {
 
     let subtotal = 0;
 
+    // All items share one currency — resolved for this visitor's country
+    // when each was added to the cart.
+    const cartCurrency = cart[0] && cart[0].currency ? cart[0].currency : "PKR";
+
     const itemsHTML = cart.map(item => {
 
         const price = Number(item.price || 0);
@@ -112,7 +116,7 @@ function renderCheckout(countries) {
         return `
             <div class="cart-summary-row">
                 <span>${item.name} × ${quantity}</span>
-                <span>Rs. ${lineTotal.toFixed(2)}</span>
+                <span>${formatPrice(lineTotal, item.currency)}</span>
             </div>
         `;
 
@@ -263,7 +267,7 @@ function renderCheckout(countries) {
 
                 <div class="cart-total">
                     <span>Total</span>
-                    <strong>Rs. ${subtotal.toFixed(2)}</strong>
+                    <strong>${formatPrice(subtotal, cartCurrency)}</strong>
                 </div>
 
                 <a href="cart.html" class="continue-shopping">← Back to Cart</a>
