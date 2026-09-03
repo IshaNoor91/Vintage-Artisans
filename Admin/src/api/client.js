@@ -143,5 +143,12 @@ export const api = {
     request(`/admin/products/${productId}/price-overrides`, {
       method: "PUT",
       body: JSON.stringify(payload)
+    }),
+
+  getFeatureFlags: () => request("/admin/feature-flags"),
+  updateFeatureFlag: (key, enabled) =>
+    request(`/admin/feature-flags/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled })
     })
 };

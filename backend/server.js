@@ -14,6 +14,7 @@ const {
 const pool = require("./db");
 const { getClientIP, getCountryFromIP } = require("./geolocation");
 const { resolveProductPrices } = require("./pricing");
+const { FLAGS, isFeatureEnabled, getAllFeatureFlags, setFeatureFlag } = require("./feature-flags");
 
 // ========================================
 // STRIPE
@@ -689,6 +690,19 @@ app.post("/api/create-payment-intent", async (req, res) => {
 // button, for retrying a failed/skipped attempt).
 // ========================================
 async function syncOrderToShipStation(orderId) {
+    // Admin -> Settings -> "ShipStation Integration" switch. Off means
+    // orders are still placed/stored normally — they just aren't sent to
+    // ShipStation until the flag is turned back on (and can be resent
+    // manually afterwards from the Order Detail page).
+    if (!(await isFeatureEnabled(FLAGS.SHIPSTATION_ENABLED))) {
+        console.log(`[shipstation] Order ${orderId} skipped: ShipStation is disabled (feature flag).`);
+        await pool.query(
+            `UPDATE orders SET shipstation_sync_error = $1 WHERE id = $2`,
+            ["ShipStation is currently disabled in Admin -> Settings.", orderId]
+        );
+        return;
+    }
+
     const orderResult = await pool.query(`SELECT * FROM orders WHERE id = $1`, [orderId]);
     if (orderResult.rows.length === 0) return;
     const order = orderResult.rows[0];
@@ -1616,6 +1630,48 @@ app.put("/api/admin/shipping-countries", requireAdminAuth, async (req, res) => {
 
 
 // ========================================================
+// ============  ADMIN: FEATURE FLAGS / SETTINGS  ============
+// ========================================================
+// Powers Admin -> Settings, where features like ShipStation can be
+// switched on/off from the admin panel — no code change or redeploy
+// needed. See feature-flags.js for how these are read/cached.
+
+app.get("/api/admin/feature-flags", requireAdminAuth, async (req, res) => {
+
+    try {
+        const flags = await getAllFeatureFlags();
+        res.json({ success: true, flags });
+
+    } catch (error) {
+        console.error("Error fetching feature flags:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch feature flags" });
+    }
+
+});
+
+// Body: { enabled: true|false }
+app.put("/api/admin/feature-flags/:key", requireAdminAuth, async (req, res) => {
+
+    const { key } = req.params;
+    const { enabled } = req.body;
+
+    if (typeof enabled !== "boolean") {
+        return res.status(400).json({ success: false, message: "enabled must be true or false" });
+    }
+
+    try {
+        await setFeatureFlag(key, enabled);
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error updating feature flag:", error);
+        res.status(500).json({ success: false, message: "Failed to update feature flag" });
+    }
+
+});
+
+
+// ========================================================
 // ============  ADMIN: ORDERS  =============================
 // ========================================================
 
@@ -1708,6 +1764,10 @@ app.post("/api/admin/orders/:id/send-to-shipstation", requireAdminAuth, async (r
 // that's already been sent to ShipStation.
 
 app.get("/api/admin/shipstation/carriers", requireAdminAuth, async (req, res) => {
+    if (!(await isFeatureEnabled(FLAGS.SHIPSTATION_ENABLED))) {
+        return res.status(400).json({ success: false, message: "ShipStation is currently disabled in Admin -> Settings." });
+    }
+
     try {
         const result = await listCarriers();
 
@@ -1724,6 +1784,10 @@ app.get("/api/admin/shipstation/carriers", requireAdminAuth, async (req, res) =>
 });
 
 app.get("/api/admin/shipstation/carriers/:code/services", requireAdminAuth, async (req, res) => {
+    if (!(await isFeatureEnabled(FLAGS.SHIPSTATION_ENABLED))) {
+        return res.status(400).json({ success: false, message: "ShipStation is currently disabled in Admin -> Settings." });
+    }
+
     try {
         const result = await listCarrierServices(req.params.code);
 
@@ -1740,6 +1804,10 @@ app.get("/api/admin/shipstation/carriers/:code/services", requireAdminAuth, asyn
 });
 
 app.get("/api/admin/shipstation/carriers/:code/packages", requireAdminAuth, async (req, res) => {
+    if (!(await isFeatureEnabled(FLAGS.SHIPSTATION_ENABLED))) {
+        return res.status(400).json({ success: false, message: "ShipStation is currently disabled in Admin -> Settings." });
+    }
+
     try {
         const result = await listCarrierPackages(req.params.code);
 
@@ -1759,6 +1827,10 @@ app.get("/api/admin/shipstation/carriers/:code/packages", requireAdminAuth, asyn
 // stores the tracking number + a public link to the label PDF back on
 // the order.
 app.post("/api/admin/orders/:id/purchase-label", requireAdminAuth, async (req, res) => {
+
+    if (!(await isFeatureEnabled(FLAGS.SHIPSTATION_ENABLED))) {
+        return res.status(400).json({ success: false, message: "ShipStation is currently disabled in Admin -> Settings." });
+    }
 
     const orderId = req.params.id;
     const { carrierCode, serviceCode, packageCode, weightValue, weightUnits, testLabel } = req.body;

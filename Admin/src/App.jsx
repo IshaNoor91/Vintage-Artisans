@@ -12,6 +12,7 @@ import Categories from "./pages/Categories.jsx";
 import Orders from "./pages/Orders.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
 import ShippingCountries from "./pages/ShippingCountries.jsx";
+import Settings from "./pages/Settings.jsx";
 
 function AdminLayout({ children }) {
   // On mobile the sidebar is an off-canvas drawer, toggled by the
@@ -136,6 +137,17 @@ export default function App() {
             <ProtectedRoute>
               <AdminLayout>
                 <ShippingCountries />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <Settings />
               </AdminLayout>
             </ProtectedRoute>
           }
