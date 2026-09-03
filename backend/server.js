@@ -117,6 +117,20 @@ function requireAdminAuth(req, res, next) {
 
 }
 
+// Goes right after requireAdminAuth on any route that only a Super
+// Admin should reach (currently just Team/user management). A Store
+// Admin still passes requireAdminAuth (they can log in) but is
+// blocked here.
+function requireSuperAdmin(req, res, next) {
+    if (!req.admin || req.admin.role !== "super_admin") {
+        return res.status(403).json({
+            success: false,
+            message: "Only a Super Admin can do this."
+        });
+    }
+    next();
+}
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -949,7 +963,7 @@ app.post("/api/admin/login", async (req, res) => {
         }
 
         const result = await pool.query(
-            `SELECT id, username, password_hash FROM admin_users WHERE username = $1`,
+            `SELECT id, username, password_hash, role, store_id FROM admin_users WHERE username = $1`,
             [username]
         );
 
@@ -970,8 +984,11 @@ app.post("/api/admin/login", async (req, res) => {
             });
         }
 
+        // role/storeId baked into the token itself, so every protected
+        // route can tell who's allowed to see what without an extra
+        // database lookup on every request.
         const token = jwt.sign(
-            { id: admin.id, username: admin.username },
+            { id: admin.id, username: admin.username, role: admin.role, storeId: admin.store_id },
             JWT_SECRET,
             { expiresIn: "8h" }
         );
@@ -979,7 +996,9 @@ app.post("/api/admin/login", async (req, res) => {
         res.json({
             success: true,
             token: token,
-            username: admin.username
+            username: admin.username,
+            role: admin.role,
+            storeId: admin.store_id
         });
 
     } catch (error) {
@@ -991,6 +1010,198 @@ app.post("/api/admin/login", async (req, res) => {
 
 app.get("/api/admin/me", requireAdminAuth, (req, res) => {
     res.json({ success: true, admin: req.admin });
+});
+
+
+// ========================================================
+// ============  ADMIN: STORES  ==============================
+// ========================================================
+// Just the list of storefronts sharing this backend — used by the
+// Team page's "which store" dropdown when creating/editing a Store
+// Admin. Every logged-in admin can read this (it's just names), not
+// only Super Admins.
+
+app.get("/api/admin/stores", requireAdminAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT id, name, slug FROM stores ORDER BY name ASC`);
+        res.json({ success: true, stores: result.rows });
+    } catch (error) {
+        console.error("Error fetching stores:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch stores" });
+    }
+});
+
+
+// ========================================================
+// ============  ADMIN: TEAM (USERS)  =========================
+// ========================================================
+// Super Admin only — create/manage the login accounts for this admin
+// panel. 'store_admin' accounts are limited to one store (store_id);
+// 'super_admin' accounts aren't limited to any (store_id stays null).
+// Passwords are never returned in any response here.
+
+app.get("/api/admin/users", requireAdminAuth, requireSuperAdmin, async (req, res) => {
+
+    try {
+        const result = await pool.query(`
+            SELECT u.id, u.username, u.role, u.store_id, s.name AS store_name, u.created_at
+            FROM admin_users u
+            LEFT JOIN stores s ON s.id = u.store_id
+            ORDER BY u.created_at ASC
+        `);
+
+        res.json({ success: true, users: result.rows });
+
+    } catch (error) {
+        console.error("Error fetching admin users:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch users" });
+    }
+
+});
+
+app.post("/api/admin/users", requireAdminAuth, requireSuperAdmin, async (req, res) => {
+
+    const { username, password, role, storeId } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: "Username and password are required" });
+    }
+
+    if (role !== "super_admin" && role !== "store_admin") {
+        return res.status(400).json({ success: false, message: "Role must be Super Admin or Store Admin" });
+    }
+
+    if (role === "store_admin" && !storeId) {
+        return res.status(400).json({ success: false, message: "A Store Admin must be assigned a store" });
+    }
+
+    try {
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        const result = await pool.query(
+            `
+            INSERT INTO admin_users (username, password_hash, role, store_id)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, username, role, store_id, created_at
+            `,
+            [username, passwordHash, role, role === "store_admin" ? storeId : null]
+        );
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        if (error.code === "23505") { // unique_violation on username
+            return res.status(400).json({ success: false, message: "That username is already taken" });
+        }
+        console.error("Error creating admin user:", error);
+        res.status(500).json({ success: false, message: "Failed to create user" });
+    }
+
+});
+
+// Body: { role, storeId, password } — password is optional (only sent
+// when resetting it); role/storeId are optional too (omit both to
+// only reset the password).
+app.put("/api/admin/users/:id", requireAdminAuth, requireSuperAdmin, async (req, res) => {
+
+    const userId = req.params.id;
+    const { role, storeId, password } = req.body;
+
+    if (role !== undefined && role !== "super_admin" && role !== "store_admin") {
+        return res.status(400).json({ success: false, message: "Role must be Super Admin or Store Admin" });
+    }
+
+    if (role === "store_admin" && !storeId) {
+        return res.status(400).json({ success: false, message: "A Store Admin must be assigned a store" });
+    }
+
+    try {
+        // Never let the panel end up with zero accounts that can log in
+        // as Super Admin.
+        if (role === "store_admin") {
+            const remaining = await pool.query(
+                `SELECT COUNT(*)::int AS count FROM admin_users WHERE role = 'super_admin' AND id != $1`,
+                [userId]
+            );
+            if (remaining.rows[0].count === 0) {
+                return res.status(400).json({ success: false, message: "Can't remove the last Super Admin." });
+            }
+        }
+
+        const fields = [];
+        const values = [];
+        let i = 1;
+
+        if (role !== undefined) {
+            fields.push(`role = $${i++}`);
+            values.push(role);
+            fields.push(`store_id = $${i++}`);
+            values.push(role === "store_admin" ? storeId : null);
+        }
+
+        if (password) {
+            const passwordHash = await bcrypt.hash(password, 10);
+            fields.push(`password_hash = $${i++}`);
+            values.push(passwordHash);
+        }
+
+        if (fields.length === 0) {
+            return res.status(400).json({ success: false, message: "Nothing to update" });
+        }
+
+        values.push(userId);
+
+        const result = await pool.query(
+            `UPDATE admin_users SET ${fields.join(", ")} WHERE id = $${i} RETURNING id, username, role, store_id`,
+            values
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        res.json({ success: true, user: result.rows[0] });
+
+    } catch (error) {
+        console.error("Error updating admin user:", error);
+        res.status(500).json({ success: false, message: "Failed to update user" });
+    }
+
+});
+
+app.delete("/api/admin/users/:id", requireAdminAuth, requireSuperAdmin, async (req, res) => {
+
+    const userId = req.params.id;
+
+    if (String(req.admin.id) === String(userId)) {
+        return res.status(400).json({ success: false, message: "You can't delete your own account while logged in." });
+    }
+
+    try {
+        const target = await pool.query(`SELECT role FROM admin_users WHERE id = $1`, [userId]);
+
+        if (target.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        if (target.rows[0].role === "super_admin") {
+            const remaining = await pool.query(
+                `SELECT COUNT(*)::int AS count FROM admin_users WHERE role = 'super_admin' AND id != $1`,
+                [userId]
+            );
+            if (remaining.rows[0].count === 0) {
+                return res.status(400).json({ success: false, message: "Can't delete the last Super Admin." });
+            }
+        }
+
+        await pool.query(`DELETE FROM admin_users WHERE id = $1`, [userId]);
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error deleting admin user:", error);
+        res.status(500).json({ success: false, message: "Failed to delete user" });
+    }
+
 });
 
 

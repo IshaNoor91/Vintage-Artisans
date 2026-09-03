@@ -150,5 +150,16 @@ export const api = {
     request(`/admin/feature-flags/${encodeURIComponent(key)}`, {
       method: "PUT",
       body: JSON.stringify({ enabled })
-    })
+    }),
+
+  getStores: () => request("/admin/stores"),
+
+  // Team (Super Admin only — the backend also enforces this).
+  getUsers: () => request("/admin/users"),
+  createUser: (payload) =>
+    request("/admin/users", { method: "POST", body: JSON.stringify(payload) }),
+  updateUser: (id, payload) =>
+    request(`/admin/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteUser: (id) =>
+    request(`/admin/users/${id}`, { method: "DELETE" })
 };

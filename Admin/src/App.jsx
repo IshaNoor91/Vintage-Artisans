@@ -13,6 +13,8 @@ import Orders from "./pages/Orders.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
 import ShippingCountries from "./pages/ShippingCountries.jsx";
 import Settings from "./pages/Settings.jsx";
+import Team from "./pages/Team.jsx";
+import RequireSuperAdmin from "./components/RequireSuperAdmin.jsx";
 
 function AdminLayout({ children }) {
   // On mobile the sidebar is an off-canvas drawer, toggled by the
@@ -149,6 +151,19 @@ export default function App() {
               <AdminLayout>
                 <Settings />
               </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/team"
+          element={
+            <ProtectedRoute>
+              <RequireSuperAdmin>
+                <AdminLayout>
+                  <Team />
+                </AdminLayout>
+              </RequireSuperAdmin>
             </ProtectedRoute>
           }
         />

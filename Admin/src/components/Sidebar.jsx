@@ -11,8 +11,17 @@ const LINKS = [
   { to: "/settings", label: "Settings" }
 ];
 
+// Only a Super Admin sees this — a Store Admin's account can't reach
+// /team anyway (see RequireSuperAdmin), so there's no point showing
+// the link.
+const SUPER_ADMIN_LINKS = [
+  { to: "/team", label: "Team" }
+];
+
 export default function Sidebar({ isOpen, onClose }) {
-  const { username, logout } = useAuth();
+  const { username, isSuperAdmin, logout } = useAuth();
+
+  const links = isSuperAdmin ? [...LINKS, ...SUPER_ADMIN_LINKS] : LINKS;
 
   return (
     <aside className={"sidebar" + (isOpen ? " open" : "")}>
@@ -33,7 +42,7 @@ export default function Sidebar({ isOpen, onClose }) {
       </div>
 
       <nav className="sidebar-nav">
-        {LINKS.map((link) => (
+        {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
