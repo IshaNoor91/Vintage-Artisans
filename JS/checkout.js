@@ -32,6 +32,153 @@ async function loadShippingCountries() {
 
 }
 
+
+// ========================================
+// PAYMENT METHODS
+// Which methods appear at checkout (their labels, order, and whether
+// they're restricted to one shipping country) is fully configurable from
+// Admin -> Payment Methods — never hardcoded here. A method with a
+// country_only restriction (Easypaisa / JazzCash are both Pakistan-only
+// mobile wallets today) is only shown when the selected shipping country
+// matches; the backend enforces the same rule again when the order is
+// placed, so this is convenience for the customer, not the real security
+// check.
+// ========================================
+
+async function loadPaymentMethods() {
+
+    try {
+
+        const response = await fetch(`${API_BASE}/payment-methods`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.methods) && data.methods.length > 0) {
+            return data.methods; // [{ key, label, country_only }, ...]
+        }
+
+    } catch (error) {
+        console.error("Failed to load payment methods:", error);
+    }
+
+    // Fallback so checkout never breaks if the API/table isn't reachable.
+    return [
+        { key: "cod", label: "Cash on Delivery", country_only: null },
+        { key: "stripe", label: "Pay with Card (Stripe)", country_only: null },
+        { key: "easypaisa", label: "Easypaisa", country_only: "Pakistan" },
+        { key: "jazzcash", label: "JazzCash", country_only: "Pakistan" },
+        { key: "bank_transfer", label: "Bank Transfer", country_only: null }
+    ];
+
+}
+
+// Extra fields under a payment method's radio button (card entry, wallet
+// account details + transaction ID, bank details, etc). A method with no
+// case here (e.g. Cash on Delivery) just shows its radio button and
+// nothing more. Adding a brand-new method later only needs a case added
+// here — the radio list, show/hide logic, and validation are all driven
+// off the API response already.
+function paymentPanelHTML(key) {
+
+    switch (key) {
+
+        case "stripe":
+            return `
+                <div id="payment-panel-stripe" class="payment-panel" style="display:none;">
+
+                    <label>Card Details</label>
+
+                    <div id="stripe-card-element" class="stripe-card-element"></div>
+
+                    <div id="stripe-card-errors" class="checkout-error"></div>
+
+                </div>
+            `;
+
+        case "easypaisa":
+            return `
+                <div id="payment-panel-easypaisa" class="payment-panel" style="display:none;">
+
+                    <div class="bank-details">
+
+                        <p><strong>Easypaisa Account Title:</strong> [YOUR ACCOUNT TITLE]</p>
+                        <p><strong>Easypaisa Number:</strong> [YOUR EASYPAISA NUMBER]</p>
+
+                        <p class="bank-instructions">
+                            Please send the total amount to the Easypaisa account above, then
+                            enter your Transaction ID (TID) below. We'll confirm your order
+                            once the payment is verified.
+                        </p>
+
+                    </div>
+
+                    <div class="form-group">
+                        <label for="easypaisa-transaction-ref">Easypaisa Transaction ID</label>
+                        <input type="text" id="easypaisa-transaction-ref" name="easypaisaTransactionRef">
+                    </div>
+
+                </div>
+            `;
+
+        case "jazzcash":
+            return `
+                <div id="payment-panel-jazzcash" class="payment-panel" style="display:none;">
+
+                    <div class="bank-details">
+
+                        <p><strong>JazzCash Account Title:</strong> [YOUR ACCOUNT TITLE]</p>
+                        <p><strong>JazzCash Number:</strong> [YOUR JAZZCASH NUMBER]</p>
+
+                        <p class="bank-instructions">
+                            Please send the total amount to the JazzCash account above, then
+                            enter your Transaction ID (TID) below. We'll confirm your order
+                            once the payment is verified.
+                        </p>
+
+                    </div>
+
+                    <div class="form-group">
+                        <label for="jazzcash-transaction-ref">JazzCash Transaction ID</label>
+                        <input type="text" id="jazzcash-transaction-ref" name="jazzcashTransactionRef">
+                    </div>
+
+                </div>
+            `;
+
+        case "bank_transfer":
+            return `
+                <div id="payment-panel-bank_transfer" class="payment-panel" style="display:none;">
+
+                    <div class="bank-details">
+
+                        <p><strong>Bank Name:</strong> [YOUR BANK NAME]</p>
+                        <p><strong>Account Title:</strong> [YOUR ACCOUNT TITLE]</p>
+                        <p><strong>Account Number:</strong> [YOUR ACCOUNT NUMBER]</p>
+                        <p><strong>IBAN:</strong> [YOUR IBAN]</p>
+
+                        <p class="bank-instructions">
+                            Please transfer the total amount to the account above, then
+                            enter your transaction/reference ID below. We'll confirm
+                            your order once the payment is verified.
+                        </p>
+
+                    </div>
+
+                    <div class="form-group">
+                        <label for="transaction-ref">Transaction / Reference ID</label>
+                        <input type="text" id="transaction-ref" name="transactionRef">
+                    </div>
+
+                </div>
+            `;
+
+        default:
+            return ""; // no extra panel needed (e.g. Cash on Delivery)
+
+    }
+
+}
+
+
 // ========================================
 // STRIPE CONFIG
 // Replace with your real publishable key when ready.
@@ -73,7 +220,7 @@ function clearCart() {
 // RENDER CHECKOUT
 // ========================================
 
-function renderCheckout(countries) {
+function renderCheckout(countries, paymentMethods) {
 
     const cart = getCart();
 
@@ -121,6 +268,23 @@ function renderCheckout(countries) {
         `;
 
     }).join("");
+
+    // ---- Payment method radios + their panels, both built from whatever
+    // Admin -> Payment Methods currently has enabled. The first method in
+    // the list (sorted by sort_order on the backend) starts selected. ----
+
+    const paymentOptionsHTML = paymentMethods.map((method, index) => `
+        <label
+            class="payment-option"
+            id="payment-option-${method.key}"
+            ${method.country_only ? `data-country-only="${method.country_only}"` : ""}
+        >
+            <input type="radio" name="paymentMethod" value="${method.key}"${index === 0 ? " checked" : ""}>
+            <span>${method.label}</span>
+        </label>
+    `).join("");
+
+    const paymentPanelsHTML = paymentMethods.map(method => paymentPanelHTML(method.key)).join("");
 
     container.innerHTML = `
 
@@ -189,68 +353,17 @@ function renderCheckout(countries) {
 
                         <h3>Payment Method</h3>
 
-                        <label class="payment-option">
-                            <input type="radio" name="paymentMethod" value="cod" checked>
-                            <span>Cash on Delivery</span>
-                        </label>
-
-                        <label class="payment-option">
-                            <input type="radio" name="paymentMethod" value="stripe">
-                            <span>Pay with Card (Stripe)</span>
-                        </label>
-
-                        <label class="payment-option">
-                            <input type="radio" name="paymentMethod" value="bank_transfer">
-                            <span>Bank Transfer</span>
-                        </label>
+                        ${paymentOptionsHTML}
 
                     </div>
 
-
-                    <!-- ---- Stripe card panel ---- -->
-
-                    <div id="payment-panel-stripe" class="payment-panel" style="display:none;">
-
-                        <label>Card Details</label>
-
-                        <div id="stripe-card-element" class="stripe-card-element"></div>
-
-                        <div id="stripe-card-errors" class="checkout-error"></div>
-
-                    </div>
-
-
-                    <!-- ---- Bank transfer panel ---- -->
-
-                    <div id="payment-panel-bank" class="payment-panel" style="display:none;">
-
-                        <div class="bank-details">
-
-                            <p><strong>Bank Name:</strong> [YOUR BANK NAME]</p>
-                            <p><strong>Account Title:</strong> [YOUR ACCOUNT TITLE]</p>
-                            <p><strong>Account Number:</strong> [YOUR ACCOUNT NUMBER]</p>
-                            <p><strong>IBAN:</strong> [YOUR IBAN]</p>
-
-                            <p class="bank-instructions">
-                                Please transfer the total amount to the account above, then
-                                enter your transaction/reference ID below. We'll confirm
-                                your order once the payment is verified.
-                            </p>
-
-                        </div>
-
-                        <div class="form-group">
-                            <label for="transaction-ref">Transaction / Reference ID</label>
-                            <input type="text" id="transaction-ref" name="transactionRef">
-                        </div>
-
-                    </div>
+                    ${paymentPanelsHTML}
 
 
                     <div id="checkout-error" class="checkout-error"></div>
 
                     <button type="submit" class="checkout-btn btn" id="place-order-btn">
-                        Place Order — Cash on Delivery
+                        Place Order
                     </button>
 
                 </form>
@@ -286,6 +399,54 @@ function renderCheckout(countries) {
         .querySelectorAll('input[name="paymentMethod"]')
         .forEach(radio => radio.addEventListener("change", updatePaymentUI));
 
+    document
+        .getElementById("country")
+        .addEventListener("change", updatePaymentMethodVisibility);
+
+    updatePaymentMethodVisibility();
+
+}
+
+
+// ========================================
+// COUNTRY-SPECIFIC PAYMENT METHODS
+// Any method with a country_only restriction (Easypaisa, JazzCash, or any
+// future one Admin adds) is only offered when the order is shipping to
+// that exact country — read off each option's data-country-only attribute,
+// so this works for every restricted method without hardcoding names here.
+// ========================================
+
+function updatePaymentMethodVisibility() {
+
+    const countrySelect = document.getElementById("country");
+
+    if (!countrySelect) return;
+
+    const selectedCountry = countrySelect.value;
+
+    document.querySelectorAll(".payment-option[data-country-only]").forEach(option => {
+
+        const allowedCountry = option.dataset.countryOnly;
+        const isAllowed = allowedCountry === selectedCountry;
+
+        option.hidden = !isAllowed;
+
+        // If a method that just became hidden was selected, fall back to
+        // the first still-visible method instead of leaving a hidden
+        // option checked.
+        const radio = option.querySelector('input[type="radio"]');
+
+        if (!isAllowed && radio && radio.checked) {
+
+            radio.checked = false;
+
+            const fallback = document.querySelector(".payment-option:not([hidden]) input[type=\"radio\"]");
+            if (fallback) fallback.checked = true;
+
+        }
+
+    });
+
     updatePaymentUI();
 
 }
@@ -300,25 +461,27 @@ function getSelectedPaymentMethod() {
     return checked ? checked.value : "cod";
 }
 
+function getPaymentMethodLabel(method) {
+    const option = document.getElementById(`payment-option-${method}`);
+    const span = option ? option.querySelector("span") : null;
+    return span ? span.textContent : method;
+}
+
 function updatePaymentUI() {
 
     const method = getSelectedPaymentMethod();
 
-    document.getElementById("payment-panel-stripe").style.display =
-        method === "stripe" ? "block" : "none";
-
-    document.getElementById("payment-panel-bank").style.display =
-        method === "bank_transfer" ? "block" : "none";
+    document.querySelectorAll(".payment-panel").forEach(panel => {
+        panel.style.display = panel.id === `payment-panel-${method}` ? "block" : "none";
+    });
 
     const submitButton = document.getElementById("place-order-btn");
 
     if (method === "stripe") {
         submitButton.textContent = "Pay & Place Order";
         initStripeElements();
-    } else if (method === "bank_transfer") {
-        submitButton.textContent = "Place Order — Bank Transfer";
     } else {
-        submitButton.textContent = "Place Order — Cash on Delivery";
+        submitButton.textContent = `Place Order — ${getPaymentMethodLabel(method)}`;
     }
 
 }
@@ -368,10 +531,32 @@ async function handleSubmit(event) {
     errorBox.textContent = "";
 
     const paymentMethod = getSelectedPaymentMethod();
+    const selectedOption = document.getElementById(`payment-option-${paymentMethod}`);
+
+    // ---- Country-restricted wallets (Easypaisa, JazzCash, ...) can only
+    // be used when shipping to the country they're restricted to. The
+    // option should already be hidden in that case, but this covers a
+    // stale form state too. ----
+    if (selectedOption && selectedOption.dataset.countryOnly && form.country.value !== selectedOption.dataset.countryOnly) {
+        errorBox.textContent = `${getPaymentMethodLabel(paymentMethod)} is only available for orders shipping to ${selectedOption.dataset.countryOnly}.`;
+        return;
+    }
 
     // ---- Bank transfer requires a reference number ----
     if (paymentMethod === "bank_transfer" && !form.transactionRef.value.trim()) {
         errorBox.textContent = "Please enter your transaction/reference ID.";
+        return;
+    }
+
+    // ---- Easypaisa requires a transaction ID ----
+    if (paymentMethod === "easypaisa" && !form.easypaisaTransactionRef.value.trim()) {
+        errorBox.textContent = "Please enter your Easypaisa Transaction ID.";
+        return;
+    }
+
+    // ---- JazzCash requires a transaction ID ----
+    if (paymentMethod === "jazzcash" && !form.jazzcashTransactionRef.value.trim()) {
+        errorBox.textContent = "Please enter your JazzCash Transaction ID.";
         return;
     }
 
@@ -380,6 +565,11 @@ async function handleSubmit(event) {
         (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
         0
     );
+
+    // All items in a cart share one currency (resolved for this visitor's
+    // country when each was added) — sent along so the order confirmation
+    // email shows the right currency instead of assuming PKR.
+    const cartCurrency = cart[0] && cart[0].currency ? cart[0].currency : "PKR";
 
     const payload = {
         customer: {
@@ -400,6 +590,7 @@ async function handleSubmit(event) {
         })),
         subtotal: subtotal,
         total: subtotal,
+        currency: cartCurrency,
         paymentMethod: paymentMethod
     };
 
@@ -444,6 +635,16 @@ async function handleSubmit(event) {
             }
 
             payload.paymentReference = result.paymentIntent.id;
+
+        // ---- EASYPAISA: attach the transaction ID the customer entered ----
+        } else if (paymentMethod === "easypaisa") {
+
+            payload.paymentReference = form.easypaisaTransactionRef.value.trim();
+
+        // ---- JAZZCASH: attach the transaction ID the customer entered ----
+        } else if (paymentMethod === "jazzcash") {
+
+            payload.paymentReference = form.jazzcashTransactionRef.value.trim();
 
         // ---- BANK TRANSFER: attach the reference the customer entered ----
         } else if (paymentMethod === "bank_transfer") {
@@ -494,6 +695,10 @@ function renderConfirmation(orderId, paymentMethod) {
 
     if (paymentMethod === "bank_transfer") {
         note = "We'll verify your bank transfer and confirm your order shortly.";
+    } else if (paymentMethod === "easypaisa") {
+        note = "We'll verify your Easypaisa payment and confirm your order shortly.";
+    } else if (paymentMethod === "jazzcash") {
+        note = "We'll verify your JazzCash payment and confirm your order shortly.";
     } else if (paymentMethod === "stripe") {
         note = "Your payment was successful — we'll get your order ready for delivery.";
     }
@@ -521,8 +726,11 @@ function renderConfirmation(orderId, paymentMethod) {
 
 
 async function init() {
-    const countries = await loadShippingCountries();
-    renderCheckout(countries);
+    const [countries, paymentMethods] = await Promise.all([
+        loadShippingCountries(),
+        loadPaymentMethods()
+    ]);
+    renderCheckout(countries, paymentMethods);
 }
 
 document.addEventListener("DOMContentLoaded", init);

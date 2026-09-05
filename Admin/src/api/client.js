@@ -125,6 +125,13 @@ export const api = {
       body: JSON.stringify({ enabledIds })
     }),
 
+  getPaymentMethods: () => request("/admin/payment-methods"),
+  updatePaymentMethods: (enabledIds) =>
+    request("/admin/payment-methods", {
+      method: "PUT",
+      body: JSON.stringify({ enabledIds })
+    }),
+
   getShipStationCarriers: () => request("/admin/shipstation/carriers"),
   getShipStationServices: (carrierCode) =>
     request(`/admin/shipstation/carriers/${encodeURIComponent(carrierCode)}/services`),

@@ -25,12 +25,16 @@
 }
 
 .payment-option:has(input:checked) {
-  border-color: #2f6f4f;
-  background: #f2f7f4;
+  border-color: var(--primary);
+  background: #eef3f9;
 }
 
 .payment-option input {
-  accent-color: #2f6f4f;
+  accent-color: var(--primary);
+}
+
+.payment-option[hidden] {
+  display: none;
 }
 
 .payment-panel {

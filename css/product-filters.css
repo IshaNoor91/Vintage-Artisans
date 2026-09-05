@@ -8,7 +8,7 @@
   --pf-border: #e3e1db;
   --pf-ink: #222;
   --pf-muted: #767676;
-  --pf-accent: #2f6f4f;
+  --pf-accent: var(--primary, #05295e);
   --pf-bg: #ffffff;
   --pf-radius: 8px;
 }

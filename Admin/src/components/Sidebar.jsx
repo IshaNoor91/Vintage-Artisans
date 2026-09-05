@@ -8,6 +8,7 @@ const LINKS = [
   { to: "/categories", label: "Categories" },
   { to: "/orders", label: "Orders" },
   { to: "/shipping-countries", label: "Shipping Countries" },
+  { to: "/payment-methods", label: "Payment Methods" },
   { to: "/settings", label: "Settings" }
 ];
 

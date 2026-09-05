@@ -12,6 +12,7 @@ import Categories from "./pages/Categories.jsx";
 import Orders from "./pages/Orders.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
 import ShippingCountries from "./pages/ShippingCountries.jsx";
+import PaymentMethods from "./pages/PaymentMethods.jsx";
 import Settings from "./pages/Settings.jsx";
 import Team from "./pages/Team.jsx";
 import RequireSuperAdmin from "./components/RequireSuperAdmin.jsx";
@@ -139,6 +140,17 @@ export default function App() {
             <ProtectedRoute>
               <AdminLayout>
                 <ShippingCountries />
+              </AdminLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/payment-methods"
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <PaymentMethods />
               </AdminLayout>
             </ProtectedRoute>
           }

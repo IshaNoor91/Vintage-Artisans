@@ -15,6 +15,7 @@ const pool = require("./db");
 const { getClientIP, getCountryFromIP } = require("./geolocation");
 const { resolveProductPrices } = require("./pricing");
 const { FLAGS, isFeatureEnabled, getAllFeatureFlags, setFeatureFlag } = require("./feature-flags");
+const { sendContactNotification, sendOrderConfirmation, sendOrderNotificationToStore } = require("./mailer");
 
 // ========================================
 // STRIPE
@@ -526,6 +527,36 @@ app.get("/api/shipping-countries", async (req, res) => {
     }
 });
 
+// ========================================
+// PAYMENT METHODS — public, enabled-only list for the checkout
+// Payment Method selector (JS/checkout.js). Which methods are enabled,
+// and which are Pakistan-only (mobile wallets like Easypaisa/JazzCash),
+// is configured from Admin -> Payment Methods, never hardcoded here.
+// ========================================
+app.get("/api/payment-methods", async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT key, label, country_only
+            FROM payment_methods
+            WHERE enabled = true
+            ORDER BY sort_order ASC
+        `);
+
+        res.json({
+            success: true,
+            methods: result.rows
+        });
+
+    } catch (error) {
+        console.error("Error fetching payment methods:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch payment methods"
+        });
+    }
+});
+
 app.get("/api/products/price-range", async (req, res) => {
     try {
         const result = await pool.query(`
@@ -755,7 +786,7 @@ async function syncOrderToShipStation(orderId) {
 
 app.post("/api/orders", async (req, res) => {
 
-    const { customer, items, subtotal, total, paymentMethod, paymentReference } = req.body;
+    const { customer, items, subtotal, total, currency, paymentMethod, paymentReference } = req.body;
 
     if (!customer || !customer.fullName || !customer.phone || !customer.address) {
         return res.status(400).json({
@@ -801,11 +832,45 @@ app.post("/api/orders", async (req, res) => {
     }
 
     // ========================================
-    // PAYMENT METHOD
+    // PAYMENT METHOD — must be one of the methods currently enabled in
+    // Admin -> Payment Methods. Checked server-side too (not just in the
+    // checkout UI) so a request that bypasses the frontend can't use a
+    // method the store has turned off, or a wallet (Easypaisa/JazzCash)
+    // for a country it isn't offered in.
     // ========================================
 
-    const allowedMethods = ["cod", "stripe", "bank_transfer"];
-    const method = allowedMethods.includes(paymentMethod) ? paymentMethod : "cod";
+    const requestedMethod = paymentMethod || "cod";
+    let methodRow;
+
+    try {
+        const methodResult = await pool.query(
+            `SELECT key, country_only FROM payment_methods WHERE key = $1 AND enabled = true`,
+            [requestedMethod]
+        );
+        methodRow = methodResult.rows[0];
+    } catch (error) {
+        console.error("Error checking payment method:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not verify payment method"
+        });
+    }
+
+    if (!methodRow) {
+        return res.status(400).json({
+            success: false,
+            message: `"${requestedMethod}" is not an available payment method right now.`
+        });
+    }
+
+    if (methodRow.country_only && methodRow.country_only !== orderCountry) {
+        return res.status(400).json({
+            success: false,
+            message: `${methodRow.key} is only available for orders shipping to ${methodRow.country_only}.`
+        });
+    }
+
+    const method = methodRow.key;
 
     let orderStatus = "pending";
 
@@ -925,6 +990,29 @@ app.post("/api/orders", async (req, res) => {
                 console.error(`[shipstation] Unexpected error syncing order ${orderId}:`, error);
             });
         }
+
+        // Confirmation email to the customer + a heads-up to the store
+        // inbox — also done after responding, in the background. Both
+        // fail silently (logged, not thrown) if email isn't configured
+        // yet, so this never affects the order itself.
+        const orderCustomer = { ...customer, country: orderCountry };
+
+        sendOrderConfirmation({
+            orderId,
+            customer: orderCustomer,
+            items,
+            total: total || subtotal || 0,
+            currency,
+            paymentMethod: method
+        });
+
+        sendOrderNotificationToStore({
+            orderId,
+            customer: orderCustomer,
+            total: total || subtotal || 0,
+            currency,
+            paymentMethod: method
+        });
 
     } catch (error) {
 
@@ -1841,6 +1929,60 @@ app.put("/api/admin/shipping-countries", requireAdminAuth, async (req, res) => {
 
 
 // ========================================================
+// ============  ADMIN: PAYMENT METHODS  =====================
+// ========================================================
+// Powers Admin -> Payment Methods, where each payment method checkout.js
+// can offer (Cash on Delivery, Stripe, Easypaisa, JazzCash, Bank Transfer)
+// can be turned on/off with a checkbox — nothing about which methods are
+// available is hardcoded in the frontend.
+
+app.get("/api/admin/payment-methods", requireAdminAuth, async (req, res) => {
+
+    try {
+        const result = await pool.query(`
+            SELECT id, key, label, country_only, enabled, sort_order
+            FROM payment_methods
+            ORDER BY sort_order ASC
+        `);
+
+        res.json({ success: true, methods: result.rows });
+
+    } catch (error) {
+        console.error("Error fetching admin payment methods:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch payment methods" });
+    }
+
+});
+
+// Body: { enabledIds: [1, 3, ...] } — every id in the array becomes
+// enabled, every other row becomes disabled. Same one-statement approach
+// as shipping countries above, so the checkbox list always ends up
+// matching exactly what was saved.
+app.put("/api/admin/payment-methods", requireAdminAuth, async (req, res) => {
+
+    const { enabledIds } = req.body;
+
+    if (!Array.isArray(enabledIds) || !enabledIds.every(id => Number.isInteger(id))) {
+        return res.status(400).json({ success: false, message: "enabledIds must be an array of ids" });
+    }
+
+    try {
+        await pool.query(
+            `UPDATE payment_methods SET enabled = (id = ANY($1::int[]))`,
+            [enabledIds]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error updating payment methods:", error);
+        res.status(500).json({ success: false, message: "Failed to update payment methods" });
+    }
+
+});
+
+
+// ========================================================
 // ============  ADMIN: FEATURE FLAGS / SETTINGS  ============
 // ========================================================
 // Powers Admin -> Settings, where features like ShipStation can be
@@ -2163,6 +2305,11 @@ app.post("/api/contact", async (req, res) => {
         );
 
         res.json({ success: true });
+
+        // Notify the store inbox — fails silently (logged, not thrown) if
+        // EMAIL_USER/EMAIL_PASS aren't configured yet, so this never turns
+        // a successfully-saved message into an error for the customer.
+        sendContactNotification({ name, email, message });
 
     } catch (error) {
         console.error("Error saving contact message:", error);
