@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const EMPTY_FORM = {
   name: "",
@@ -16,15 +17,18 @@ const EMPTY_FORM = {
   tags: "",
   published: true,
   featured: false,
-  categoryIds: []
+  categoryIds: [],
+  storeId: ""
 };
 
 export default function ProductForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { isSuperAdmin, storeId: myStoreId } = useAuth();
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [stores, setStores] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -32,9 +36,28 @@ export default function ProductForm() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
+  // Load the store list, and — for a new product — default the store
+  // field: a Store Admin is locked to their own store, a Super Admin
+  // starts on the first store (they can change it before saving).
   useEffect(() => {
-    api.getCategories().then((data) => setCategories(data.categories));
+    api.getStores().then((data) => {
+      setStores(data.stores);
+      if (!isEdit) {
+        const defaultId = isSuperAdmin ? data.stores[0]?.id : Number(myStoreId);
+        setForm((prev) => ({ ...prev, storeId: defaultId ?? "" }));
+      }
+    }).catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Categories are store-specific, so they're re-fetched whenever the
+  // selected store changes (relevant for a Super Admin switching stores
+  // on the create form — a Store Admin's store never changes).
+  useEffect(() => {
+    const slug = stores.find((s) => s.id === form.storeId)?.slug;
+    if (!slug) return;
+    api.getCategories(slug).then((data) => setCategories(data.categories));
+  }, [form.storeId, stores]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -57,7 +80,8 @@ export default function ProductForm() {
           tags: p.tags || "",
           published: p.published ?? true,
           featured: p.featured ?? false,
-          categoryIds: p.categoryIds || []
+          categoryIds: p.categoryIds || [],
+          storeId: p.store_id ?? ""
         });
       })
       .catch((err) => setError(err.message))
@@ -154,6 +178,22 @@ export default function ProductForm() {
                 required
               />
             </div>
+
+            {isSuperAdmin && (
+              <div className="form-field">
+                <label>Store</label>
+                <select
+                  value={form.storeId}
+                  onChange={(e) => updateField("storeId", Number(e.target.value))}
+                  required
+                >
+                  <option value="" disabled>Select a store...</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="form-field">
               <label>SKU</label>

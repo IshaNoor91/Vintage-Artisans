@@ -91,7 +91,11 @@ export const api = {
 
   getStats: () => request("/admin/stats"),
 
-  getProducts: () => request("/admin/products"),
+  // storeSlug: optional — only meaningful for a Super Admin (a Store
+  // Admin is filtered server-side regardless of what's passed here).
+  // Used by the Products page's store filter dropdown.
+  getProducts: (storeSlug) =>
+    request(`/admin/products${storeSlug ? `?store=${storeSlug}` : ""}`),
   getProduct: (id) => request(`/admin/products/${id}`),
   createProduct: (payload) =>
     request("/admin/products", { method: "POST", body: JSON.stringify(payload) }),
@@ -100,7 +104,11 @@ export const api = {
   deleteProduct: (id) =>
     request(`/admin/products/${id}`, { method: "DELETE" }),
 
-  getCategories: () => request("/categories"),
+  // storeSlug (e.g. "vintage"/"signeon"): the public /categories route
+  // defaults to "vintage" when omitted, so the Admin panel must always
+  // pass one explicitly once a store is known.
+  getCategories: (storeSlug) =>
+    request(`/categories${storeSlug ? `?store=${storeSlug}` : ""}`),
   createCategory: (payload) =>
     request("/admin/categories", { method: "POST", body: JSON.stringify(payload) }),
   updateCategory: (id, payload) =>
@@ -108,7 +116,8 @@ export const api = {
   deleteCategory: (id) =>
     request(`/admin/categories/${id}`, { method: "DELETE" }),
 
-  getOrders: () => request("/admin/orders"),
+  getOrders: (storeSlug) =>
+    request(`/admin/orders${storeSlug ? `?store=${storeSlug}` : ""}`),
   getOrder: (id) => request(`/admin/orders/${id}`),
   updateOrderStatus: (id, status) =>
     request(`/admin/orders/${id}/status`, {

@@ -1,28 +1,57 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Categories() {
+  const { isSuperAdmin, storeId: myStoreId } = useAuth();
+
+  const [stores, setStores] = useState([]);
+  // The store slug categories are currently scoped to — categories are
+  // always "one store's categories", so unlike Products there's no
+  // meaningful "all stores" view here. A Store Admin is locked to their
+  // own store; a Super Admin picks one (defaults to the first store).
+  const [activeSlug, setActiveSlug] = useState("");
+
   const [categories, setCategories] = useState(null);
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    api.getStores().then((data) => {
+      setStores(data.stores);
+      if (!isSuperAdmin) {
+        const mine = data.stores.find((s) => s.id === Number(myStoreId));
+        setActiveSlug(mine ? mine.slug : "");
+      } else if (data.stores.length > 0) {
+        setActiveSlug(data.stores[0].slug);
+      }
+    }).catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function load() {
+    if (!activeSlug) return;
     api
-      .getCategories()
+      .getCategories(activeSlug)
       .then((data) => setCategories(data.categories))
       .catch((err) => setError(err.message));
   }
 
-  useEffect(load, []);
+  useEffect(load, [activeSlug]);
 
   async function handleAdd(event) {
     event.preventDefault();
     if (!name.trim()) return;
 
+    const activeStore = stores.find((s) => s.slug === activeSlug);
+
     try {
-      await api.createCategory({ name: name.trim() });
+      await api.createCategory({
+        name: name.trim(),
+        storeId: isSuperAdmin ? activeStore?.id : undefined
+      });
       setName("");
       load();
     } catch (err) {
@@ -63,6 +92,18 @@ export default function Categories() {
           <h1>Categories</h1>
           <p>{categories ? `${categories.length} categories` : "Loading..."}</p>
         </div>
+
+        {isSuperAdmin && stores.length > 0 && (
+          <select
+            value={activeSlug}
+            onChange={(e) => setActiveSlug(e.target.value)}
+            aria-label="Store"
+          >
+            {stores.map((s) => (
+              <option key={s.id} value={s.slug}>{s.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>

@@ -2,10 +2,19 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
 import { StockBadge } from "../components/StatusBadge.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Products() {
+  const { isSuperAdmin } = useAuth();
+
   const [products, setProducts] = useState(null);
   const [error, setError] = useState("");
+
+  // Store filter — Super Admin only. "" means "all stores". A Store
+  // Admin never sees this (the backend filters them to their own store
+  // regardless of what's passed here).
+  const [stores, setStores] = useState([]);
+  const [storeFilter, setStoreFilter] = useState("");
 
   // Countries with a manual price-override column. Loaded from the same
   // Admin -> Shipping Countries list, filtered to enabled countries only —
@@ -22,10 +31,15 @@ export default function Products() {
 
   function load() {
     api
-      .getProducts()
+      .getProducts(storeFilter)
       .then((data) => setProducts(data.products))
       .catch((err) => setError(err.message));
   }
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    api.getStores().then((data) => setStores(data.stores)).catch(() => {});
+  }, [isSuperAdmin]);
 
   function loadCountries() {
     api
@@ -39,7 +53,7 @@ export default function Products() {
       .catch((err) => setCountriesError(err.message));
   }
 
-  useEffect(load, []);
+  useEffect(load, [storeFilter]);
   useEffect(loadCountries, []);
 
   async function handleDelete(id, name) {
@@ -132,9 +146,24 @@ export default function Products() {
           <p>{products ? `${products.length} products` : "Loading..."}</p>
         </div>
 
-        <Link to="/products/new" className="btn btn-primary">
-          + Add Product
-        </Link>
+        <div className="row-actions" style={{ alignItems: "center" }}>
+          {isSuperAdmin && stores.length > 0 && (
+            <select
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+              aria-label="Filter by store"
+            >
+              <option value="">All stores</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.slug}>{s.name}</option>
+              ))}
+            </select>
+          )}
+
+          <Link to="/products/new" className="btn btn-primary">
+            + Add Product
+          </Link>
+        </div>
       </div>
 
       {error && <div className="empty-state">{error}</div>}
@@ -154,6 +183,7 @@ export default function Products() {
               <tr>
                 <th></th>
                 <th>Name</th>
+                {isSuperAdmin && <th>Store</th>}
                 <th>Price</th>
                 {overrideCountries.map((c) => (
                   <th key={c.code} title={`Manual price override for ${c.name}`}>
@@ -169,7 +199,7 @@ export default function Products() {
               {products.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6 + overrideCountries.length}
+                    colSpan={6 + overrideCountries.length + (isSuperAdmin ? 1 : 0)}
                     style={{ textAlign: "center", color: "var(--text-muted)" }}
                   >
                     No products yet — add your first one.
@@ -186,6 +216,9 @@ export default function Products() {
                       {image && <img className="product-thumb" src={image} alt="" />}
                     </td>
                     <td>{product.name}</td>
+                    {isSuperAdmin && (
+                      <td>{stores.find((s) => s.id === product.store_id)?.name || "—"}</td>
+                    )}
                     <td>
                       {product.sale_price ? (
                         <>

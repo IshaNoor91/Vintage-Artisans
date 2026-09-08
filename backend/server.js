@@ -157,6 +157,25 @@ async function resolveRequestCountry(req) {
     }
 }
 
+// ========================================
+// STORE SCOPING
+// Every storefront-facing route below takes an optional ?store=<slug>
+// (vintage | signeon) and resolves it to stores.id. Omitted/unknown
+// defaults to "vintage" — the live Vintage frontend/Admin calls that
+// don't send it yet keep working exactly as before.
+// ========================================
+async function resolveStoreId(slug) {
+    const result = await pool.query(
+        `SELECT id FROM stores WHERE slug = $1`,
+        [slug || "vintage"]
+    );
+    if (result.rows.length > 0) return result.rows[0].id;
+
+    // Unknown slug — fall back to vintage rather than 500ing.
+    const fallback = await pool.query(`SELECT id FROM stores WHERE slug = 'vintage'`);
+    return fallback.rows[0]?.id || null;
+}
+
 // Public — lets the frontend show "Prices shown in GBP" style messaging
 // if it wants to, without duplicating the IP-detection logic itself.
 app.get("/api/detect-location", async (req, res) => {
@@ -209,11 +228,17 @@ app.get("/api/products", async (req, res) => {
         const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
         const sort = req.query.sort || "default";
         const search = req.query.search ? req.query.search.trim() : null;
+        const featuredOnly = req.query.featured === "true";
+        const storeId = await resolveStoreId(req.query.store);
 
         let joinClause = "";
-        const whereConditions = ["p.published = true"];
-        const params = [];
-        let paramIndex = 1;
+        const whereConditions = ["p.published = true", "p.store_id = $1"];
+        const params = [storeId];
+        let paramIndex = 2;
+
+        if (featuredOnly) {
+            whereConditions.push("p.featured = true");
+        }
 
         if (category) {
             joinClause = `
@@ -326,10 +351,11 @@ app.get("/api/products", async (req, res) => {
         const minPrice = req.query.minPrice !== undefined ? parseFloat(req.query.minPrice) : null;
         const maxPrice = req.query.maxPrice !== undefined ? parseFloat(req.query.maxPrice) : null;
         const sort = req.query.sort || "default";
+        const storeId = await resolveStoreId(req.query.store);
 
-        const whereConditions = ["c.slug = $1", "p.published = true"];
-        const params = [slug];
-        let paramIndex = 2;
+        const whereConditions = ["c.slug = $1", "p.published = true", "p.store_id = $2"];
+        const params = [slug, storeId];
+        let paramIndex = 3;
 
         if (minPrice !== null && !Number.isNaN(minPrice)) {
             whereConditions.push(`COALESCE(p.sale_price, p.regular_price) >= $${paramIndex}`);
@@ -416,6 +442,7 @@ app.get("/api/search", async (req, res) => {
         }
 
         const likeTerm = `%${q}%`;
+        const storeId = await resolveStoreId(req.query.store);
 
         const productsResult = await pool.query(
             `
@@ -427,22 +454,24 @@ app.get("/api/search", async (req, res) => {
                 images
             FROM products
             WHERE published = true
-              AND name ILIKE $1
+              AND store_id = $1
+              AND name ILIKE $2
             ORDER BY name ASC
             LIMIT 6
             `,
-            [likeTerm]
+            [storeId, likeTerm]
         );
 
         const categoriesResult = await pool.query(
             `
             SELECT id, name, slug
             FROM categories
-            WHERE name ILIKE $1
+            WHERE store_id = $1
+              AND name ILIKE $2
             ORDER BY name ASC
             LIMIT 5
             `,
-            [likeTerm]
+            [storeId, likeTerm]
         );
 
         const countryCode = await resolveRequestCountry(req);
@@ -471,11 +500,12 @@ app.get("/api/categories", async (req, res) => {
         // the shop/category sidebar filters, which should never mix the
         // two). No ?type= at all (e.g. the admin panel) returns everything.
         const { type } = req.query;
-        const params = [];
-        let query = `SELECT id, name, slug FROM categories`;
+        const storeId = await resolveStoreId(req.query.store);
+        const params = [storeId];
+        let query = `SELECT id, name, slug FROM categories WHERE store_id = $1`;
 
         if (type === "product" || type === "design") {
-            query += ` WHERE category_type = $1`;
+            query += ` AND category_type = $2`;
             params.push(type);
         }
 
@@ -559,13 +589,14 @@ app.get("/api/payment-methods", async (req, res) => {
 
 app.get("/api/products/price-range", async (req, res) => {
     try {
+        const storeId = await resolveStoreId(req.query.store);
         const result = await pool.query(`
             SELECT
                 MIN(COALESCE(sale_price, regular_price)) AS min_price,
                 MAX(COALESCE(sale_price, regular_price)) AS max_price
             FROM products
-            WHERE published = true
-        `);
+            WHERE published = true AND store_id = $1
+        `, [storeId]);
 
         res.json({
             success: true,
@@ -586,8 +617,11 @@ app.get("/api/products/price-range", async (req, res) => {
 app.get("/api/products/:id", async (req, res) => {
     try {
         const productId = req.params.id;
+        const storeId = await resolveStoreId(req.query.store);
 
-        // Get product
+        // Get product — scoped to the requesting store so a Signeon
+        // page can't be pointed at a Vintage product id (or vice versa)
+        // just by guessing numbers.
         const productResult = await pool.query(
             `
             SELECT
@@ -609,9 +643,9 @@ app.get("/api/products/:id", async (req, res) => {
                 published,
                 featured
             FROM products
-            WHERE id = $1
+            WHERE id = $1 AND store_id = $2
             `,
-            [productId]
+            [productId, storeId]
         );
 
         // Product doesn't exist
@@ -786,7 +820,7 @@ async function syncOrderToShipStation(orderId) {
 
 app.post("/api/orders", async (req, res) => {
 
-    const { customer, items, subtotal, total, currency, paymentMethod, paymentReference } = req.body;
+    const { customer, items, subtotal, total, currency, paymentMethod, paymentReference, store } = req.body;
 
     if (!customer || !customer.fullName || !customer.phone || !customer.address) {
         return res.status(400).json({
@@ -909,6 +943,7 @@ app.post("/api/orders", async (req, res) => {
 
     }
 
+    const storeId = await resolveStoreId(store);
     const client = await pool.connect();
 
     try {
@@ -929,9 +964,10 @@ app.post("/api/orders", async (req, res) => {
                 total,
                 payment_method,
                 payment_reference,
-                status
+                status,
+                store_id
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
             RETURNING id
             `,
             [
@@ -947,7 +983,8 @@ app.post("/api/orders", async (req, res) => {
                 total || subtotal || 0,
                 method,
                 paymentReference || null,
-                orderStatus
+                orderStatus,
+                storeId
             ]
         );
 
@@ -1300,27 +1337,38 @@ app.delete("/api/admin/users/:id", requireAdminAuth, requireSuperAdmin, async (r
 app.get("/api/admin/stats", requireAdminAuth, async (req, res) => {
 
     try {
+        // A Store Admin only ever sees their own store's numbers; a
+        // Super Admin sees everything (no ?store= support here — the
+        // Dashboard doesn't have a store switcher, unlike Products/
+        // Categories/Orders).
+        const storeId = req.admin.role === "store_admin" ? req.admin.storeId : null;
+        const productParams = storeId ? [storeId] : [];
+        const productStoreClause = storeId ? "AND store_id = $1" : "";
+        const orderStoreClause = storeId ? "WHERE store_id = $1" : "";
+
         const [
             productCount,
             lowStockCount,
             orderStats,
             recentOrders
         ] = await Promise.all([
-            pool.query(`SELECT COUNT(*) AS total FROM products WHERE published = true`),
-            pool.query(`SELECT COUNT(*) AS total FROM products WHERE stock IS NOT NULL AND stock < 5`),
+            pool.query(`SELECT COUNT(*) AS total FROM products WHERE published = true ${productStoreClause}`, productParams),
+            pool.query(`SELECT COUNT(*) AS total FROM products WHERE stock IS NOT NULL AND stock < 5 ${productStoreClause}`, productParams),
             pool.query(`
                 SELECT
                     COUNT(*) AS total_orders,
                     COALESCE(SUM(total), 0) AS total_revenue,
                     COUNT(*) FILTER (WHERE status = 'pending') AS pending_orders
                 FROM orders
-            `),
+                ${orderStoreClause}
+            `, productParams),
             pool.query(`
                 SELECT id, customer_name, total, status, created_at
                 FROM orders
+                ${orderStoreClause}
                 ORDER BY created_at DESC
                 LIMIT 5
-            `)
+            `, productParams)
         ]);
 
         res.json({
@@ -1546,13 +1594,35 @@ app.get("/api/admin/repair-images", requireAdminAuth, (req, res) => {
 // price_overrides comes back as { "GB": { "regularPrice": 120, "salePrice": null }, ... }
 // so the Products page can show one editable price column per enabled
 // shipping country without a separate request per product.
+// Store scoping for admin routes: a Store Admin is always forced to
+// their own store_id (req.admin.storeId, from the JWT). A Super Admin
+// sees everything unless they explicitly pass ?store=<slug> (used by
+// the Admin UI's store filter dropdown).
+async function resolveAdminStoreFilter(req) {
+    if (req.admin.role === "store_admin") {
+        return req.admin.storeId;
+    }
+    if (req.query.store) {
+        return await resolveStoreId(req.query.store);
+    }
+    return null; // Super Admin, no filter picked — show every store.
+}
+
 app.get("/api/admin/products", requireAdminAuth, async (req, res) => {
 
     try {
+        const storeId = await resolveAdminStoreFilter(req);
+        const params = [];
+        let whereClause = "";
+        if (storeId) {
+            whereClause = "WHERE p.store_id = $1";
+            params.push(storeId);
+        }
+
         const result = await pool.query(`
             SELECT
                 p.id, p.sku, p.name, p.product_type, p.regular_price, p.sale_price,
-                p.stock, p.in_stock, p.images, p.published, p.featured,
+                p.stock, p.in_stock, p.images, p.published, p.featured, p.store_id,
                 COALESCE(
                     json_object_agg(o.country_code, json_build_object(
                         'regularPrice', o.regular_price,
@@ -1562,9 +1632,10 @@ app.get("/api/admin/products", requireAdminAuth, async (req, res) => {
                 ) AS price_overrides
             FROM products p
             LEFT JOIN product_price_overrides o ON o.product_id = p.id
+            ${whereClause}
             GROUP BY p.id
             ORDER BY p.id DESC
-        `);
+        `, params);
 
         res.json({ success: true, products: result.rows });
 
@@ -1627,6 +1698,10 @@ app.get("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
             return res.status(404).json({ success: false, message: "Product not found" });
         }
 
+        if (req.admin.role === "store_admin" && productResult.rows[0].store_id !== req.admin.storeId) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
         const categoryResult = await pool.query(
             `SELECT c.id, c.name FROM categories c
              JOIN product_categories pc ON pc.category_id = c.id
@@ -1654,11 +1729,23 @@ app.post("/api/admin/products", requireAdminAuth, async (req, res) => {
     const {
         name, sku, productType, shortDescription, description,
         regularPrice, salePrice, stock, inStock, images, tags,
-        published, featured, categoryIds
+        published, featured, categoryIds, storeId
     } = req.body;
 
     if (!name) {
         return res.status(400).json({ success: false, message: "Product name is required" });
+    }
+
+    // A Store Admin's product always belongs to their own store — the
+    // client can't override this. A Super Admin must say which store.
+    let finalStoreId;
+    if (req.admin.role === "store_admin") {
+        finalStoreId = req.admin.storeId;
+    } else {
+        if (!storeId) {
+            return res.status(400).json({ success: false, message: "storeId is required" });
+        }
+        finalStoreId = storeId;
     }
 
     const client = await pool.connect();
@@ -1671,9 +1758,9 @@ app.post("/api/admin/products", requireAdminAuth, async (req, res) => {
             INSERT INTO products (
                 sku, name, product_type, short_description, description,
                 regular_price, sale_price, stock, in_stock, images, tags,
-                published, featured
+                published, featured, store_id
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
             RETURNING id
             `,
             [
@@ -1681,7 +1768,7 @@ app.post("/api/admin/products", requireAdminAuth, async (req, res) => {
                 shortDescription || null, description || null,
                 regularPrice || null, salePrice || null,
                 stock ?? null, inStock ?? true, images || null, tags || null,
-                published ?? true, featured ?? false
+                published ?? true, featured ?? false, finalStoreId
             ]
         );
 
@@ -1724,6 +1811,14 @@ app.put("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
 
     try {
         await client.query("BEGIN");
+
+        if (req.admin.role === "store_admin") {
+            const owner = await client.query(`SELECT store_id FROM products WHERE id = $1`, [productId]);
+            if (owner.rows.length === 0 || owner.rows[0].store_id !== req.admin.storeId) {
+                await client.query("ROLLBACK");
+                return res.status(404).json({ success: false, message: "Product not found" });
+            }
+        }
 
         const result = await client.query(
             `
@@ -1782,6 +1877,13 @@ app.put("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
 app.delete("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
 
     try {
+        if (req.admin.role === "store_admin") {
+            const owner = await pool.query(`SELECT store_id FROM products WHERE id = $1`, [req.params.id]);
+            if (owner.rows.length === 0 || owner.rows[0].store_id !== req.admin.storeId) {
+                return res.status(404).json({ success: false, message: "Product not found" });
+            }
+        }
+
         const result = await pool.query(
             `DELETE FROM products WHERE id = $1 RETURNING id`,
             [req.params.id]
@@ -1807,18 +1909,28 @@ app.delete("/api/admin/products/:id", requireAdminAuth, async (req, res) => {
 
 app.post("/api/admin/categories", requireAdminAuth, async (req, res) => {
 
-    const { name, slug } = req.body;
+    const { name, slug, storeId } = req.body;
 
     if (!name) {
         return res.status(400).json({ success: false, message: "Category name is required" });
+    }
+
+    let finalStoreId;
+    if (req.admin.role === "store_admin") {
+        finalStoreId = req.admin.storeId;
+    } else {
+        if (!storeId) {
+            return res.status(400).json({ success: false, message: "storeId is required" });
+        }
+        finalStoreId = storeId;
     }
 
     const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
     try {
         const result = await pool.query(
-            `INSERT INTO categories (name, slug) VALUES ($1, $2) RETURNING id`,
-            [name, finalSlug]
+            `INSERT INTO categories (name, slug, store_id) VALUES ($1, $2, $3) RETURNING id`,
+            [name, finalSlug, finalStoreId]
         );
 
         res.json({ success: true, categoryId: result.rows[0].id });
@@ -1835,6 +1947,13 @@ app.put("/api/admin/categories/:id", requireAdminAuth, async (req, res) => {
     const { name, slug } = req.body;
 
     try {
+        if (req.admin.role === "store_admin") {
+            const owner = await pool.query(`SELECT store_id FROM categories WHERE id = $1`, [req.params.id]);
+            if (owner.rows.length === 0 || owner.rows[0].store_id !== req.admin.storeId) {
+                return res.status(404).json({ success: false, message: "Category not found" });
+            }
+        }
+
         const result = await pool.query(
             `UPDATE categories SET name = $1, slug = $2 WHERE id = $3 RETURNING id`,
             [name, slug, req.params.id]
@@ -1856,6 +1975,13 @@ app.put("/api/admin/categories/:id", requireAdminAuth, async (req, res) => {
 app.delete("/api/admin/categories/:id", requireAdminAuth, async (req, res) => {
 
     try {
+        if (req.admin.role === "store_admin") {
+            const owner = await pool.query(`SELECT store_id FROM categories WHERE id = $1`, [req.params.id]);
+            if (owner.rows.length === 0 || owner.rows[0].store_id !== req.admin.storeId) {
+                return res.status(404).json({ success: false, message: "Category not found" });
+            }
+        }
+
         const result = await pool.query(
             `DELETE FROM categories WHERE id = $1 RETURNING id`,
             [req.params.id]
@@ -2031,15 +2157,24 @@ app.put("/api/admin/feature-flags/:key", requireAdminAuth, async (req, res) => {
 app.get("/api/admin/orders", requireAdminAuth, async (req, res) => {
 
     try {
+        const storeId = await resolveAdminStoreFilter(req);
+        const params = [];
+        let whereClause = "";
+        if (storeId) {
+            whereClause = "WHERE o.store_id = $1";
+            params.push(storeId);
+        }
+
         const result = await pool.query(`
             SELECT o.id, o.customer_name, o.email, o.phone, o.city,
-                   o.total, o.status, o.created_at,
+                   o.total, o.status, o.created_at, o.store_id,
                    COUNT(oi.id) AS item_count
             FROM orders o
             LEFT JOIN order_items oi ON oi.order_id = o.id
+            ${whereClause}
             GROUP BY o.id
             ORDER BY o.created_at DESC
-        `);
+        `, params);
 
         res.json({ success: true, orders: result.rows });
 
@@ -2059,6 +2194,10 @@ app.get("/api/admin/orders/:id", requireAdminAuth, async (req, res) => {
         );
 
         if (orderResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (req.admin.role === "store_admin" && orderResult.rows[0].store_id !== req.admin.storeId) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
@@ -2085,9 +2224,13 @@ app.get("/api/admin/orders/:id", requireAdminAuth, async (req, res) => {
 app.post("/api/admin/orders/:id/send-to-shipstation", requireAdminAuth, async (req, res) => {
 
     try {
-        const orderResult = await pool.query(`SELECT id FROM orders WHERE id = $1`, [req.params.id]);
+        const orderResult = await pool.query(`SELECT id, store_id FROM orders WHERE id = $1`, [req.params.id]);
 
         if (orderResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (req.admin.role === "store_admin" && orderResult.rows[0].store_id !== req.admin.storeId) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
@@ -2190,11 +2333,15 @@ app.post("/api/admin/orders/:id/purchase-label", requireAdminAuth, async (req, r
 
     try {
         const orderResult = await pool.query(
-            `SELECT shipstation_order_id FROM orders WHERE id = $1`,
+            `SELECT shipstation_order_id, store_id FROM orders WHERE id = $1`,
             [orderId]
         );
 
         if (orderResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (req.admin.role === "store_admin" && orderResult.rows[0].store_id !== req.admin.storeId) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
@@ -2269,6 +2416,13 @@ app.patch("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => 
     }
 
     try {
+        if (req.admin.role === "store_admin") {
+            const owner = await pool.query(`SELECT store_id FROM orders WHERE id = $1`, [req.params.id]);
+            if (owner.rows.length === 0 || owner.rows[0].store_id !== req.admin.storeId) {
+                return res.status(404).json({ success: false, message: "Order not found" });
+            }
+        }
+
         const result = await pool.query(
             `UPDATE orders SET status = $1 WHERE id = $2 RETURNING id`,
             [status, req.params.id]
