@@ -18,6 +18,102 @@ function firstImage(product) {
 }
 
 // ========================================
+// CART — same localStorage cart every page shares (see product.js)
+// ========================================
+const CART_KEY = "vintageArtisansCart";
+
+function getCart() {
+    try {
+        const cart = JSON.parse(localStorage.getItem(CART_KEY));
+        return Array.isArray(cart) ? cart : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveCart(cart) {
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    updateCartBadge();
+}
+
+function updateCartBadge() {
+    const total = getCart().reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+    document.querySelectorAll(".fa-bag-shopping").forEach(icon => {
+        const link = icon.closest("a");
+        if (!link) return;
+        let badge = link.querySelector(".cart-count");
+        if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "cart-count";
+            link.style.position = "relative";
+            link.appendChild(badge);
+        }
+        badge.textContent = total;
+    });
+}
+
+function addProductToCart(product, quantity) {
+    const cart = getCart();
+    const existing = cart.find(item => Number(item.id) === Number(product.id));
+    const price = Number(product.sale_price || product.regular_price || 0);
+    const image = firstImage(product) || "images/bowl.webp";
+
+    if (existing) {
+        existing.quantity += quantity;
+    } else {
+        cart.push({
+            id: product.id,
+            name: product.name,
+            price,
+            regular_price: Number(product.regular_price || 0),
+            sale_price: Number(product.sale_price || 0),
+            currency: product.currency || "PKR",
+            image,
+            quantity
+        });
+    }
+
+    saveCart(cart);
+}
+
+// Wires the −/+ buttons on every card's quantity stepper (.card-qty) found
+// inside the given container. Safe to call after each re-render.
+function wireCardQuantitySteppers(scope) {
+    scope.querySelectorAll(".card-qty").forEach(wrapper => {
+        const input = wrapper.querySelector(".card-qty-input");
+        wrapper.querySelector(".card-qty-minus")?.addEventListener("click", () => {
+            input.value = Math.max(1, (Number(input.value) || 1) - 1);
+        });
+        wrapper.querySelector(".card-qty-plus")?.addEventListener("click", () => {
+            input.value = (Number(input.value) || 1) + 1;
+        });
+    });
+}
+
+// Delegated add-to-cart wiring — call after any innerHTML render that used
+// productCardHTML(), passing that same list of products.
+function wireAddToCartButtons(container, products) {
+    wireCardQuantitySteppers(container);
+
+    container.querySelectorAll(".add-to-cart-btn").forEach(button => {
+        button.addEventListener("click", () => {
+            const product = products.find(p => Number(p.id) === Number(button.dataset.id));
+            if (!product) return;
+
+            const qtyInput = button.closest(".nh-product-info").querySelector(".card-qty-input");
+            const quantity = Math.max(1, Number(qtyInput?.value) || 1);
+
+            addProductToCart(product, quantity);
+
+            const original = button.textContent;
+            button.textContent = "Added ✓";
+            setTimeout(() => { button.textContent = original; }, 1500);
+        });
+    });
+}
+
+// ========================================
 // FEATURED COLLECTIONS
 // Uses real Design Family categories, each represented by one of its
 // own real products' image — same lookup all-categories.js uses.
@@ -87,14 +183,19 @@ function productCardHTML(product) {
 
     return `
         <div class="nh-product-card">
-            <div class="nh-product-image">
+            <a href="product.html?id=${product.id}" class="nh-product-image">
                 ${badge}
                 <img src="${image}" alt="${product.name}" loading="lazy" decoding="async">
-            </div>
+            </a>
             <div class="nh-product-info">
                 <h3>${product.name}</h3>
                 <div class="nh-product-price">${priceHTML}</div>
-                <a href="product.html?id=${product.id}" class="nh-view-btn">View Details</a>
+                <div class="card-qty">
+                    <button type="button" class="card-qty-minus">−</button>
+                    <input type="number" class="card-qty-input" value="1" min="1">
+                    <button type="button" class="card-qty-plus">+</button>
+                </div>
+                <button type="button" class="nh-view-btn add-to-cart-btn" data-id="${product.id}">Add to Cart</button>
             </div>
         </div>
     `;
@@ -124,6 +225,7 @@ async function loadBestSelling() {
         const picks = [...featured, ...rest].slice(0, PRODUCTS_COUNT);
 
         container.innerHTML = picks.map(productCardHTML).join("");
+        wireAddToCartButtons(container, picks);
 
     } catch (error) {
         console.error("Failed to load best selling products:", error);
@@ -149,6 +251,7 @@ async function loadNewArrivals() {
         }
 
         container.innerHTML = data.products.map(productCardHTML).join("");
+        wireAddToCartButtons(container, data.products);
 
     } catch (error) {
         console.error("Failed to load new arrivals:", error);

@@ -11,6 +11,80 @@ const breadcrumbParent = document.getElementById("breadcrumb-parent");
 const breadcrumbCategory = document.getElementById("breadcrumb-category");
 
 // ========================================
+// CART — same localStorage cart every page shares (see product.js)
+// ========================================
+const CART_KEY = "vintageArtisansCart";
+
+function getCart() {
+    try {
+        const cart = JSON.parse(localStorage.getItem(CART_KEY));
+        return Array.isArray(cart) ? cart : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveCart(cart) {
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    updateCartBadge();
+}
+
+function updateCartBadge() {
+    const total = getCart().reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+    document.querySelectorAll(".fa-bag-shopping").forEach(icon => {
+        const link = icon.closest("a");
+        if (!link) return;
+        let badge = link.querySelector(".cart-count");
+        if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "cart-count";
+            link.style.position = "relative";
+            link.appendChild(badge);
+        }
+        badge.textContent = total;
+    });
+}
+
+function addProductToCart(product, quantity) {
+    const cart = getCart();
+    const existing = cart.find(item => Number(item.id) === Number(product.id));
+    const price = Number(product.sale_price || product.regular_price || 0);
+    const image = product.images ? product.images.split(",")[0].trim() : "images/bowl.webp";
+
+    if (existing) {
+        existing.quantity += quantity;
+    } else {
+        cart.push({
+            id: product.id,
+            name: product.name,
+            price,
+            regular_price: Number(product.regular_price || 0),
+            sale_price: Number(product.sale_price || 0),
+            currency: product.currency || "PKR",
+            image,
+            quantity
+        });
+    }
+
+    saveCart(cart);
+}
+
+// Wires the −/+ buttons on every card's quantity stepper (.card-qty) found
+// inside the given container. Safe to call after each re-render.
+function wireCardQuantitySteppers(scope) {
+    scope.querySelectorAll(".card-qty").forEach(wrapper => {
+        const input = wrapper.querySelector(".card-qty-input");
+        wrapper.querySelector(".card-qty-minus")?.addEventListener("click", () => {
+            input.value = Math.max(1, (Number(input.value) || 1) - 1);
+        });
+        wrapper.querySelector(".card-qty-plus")?.addEventListener("click", () => {
+            input.value = (Number(input.value) || 1) + 1;
+        });
+    });
+}
+
+// ========================================
 // FILTER / SORT UI ELEMENTS
 // ========================================
 
@@ -495,7 +569,7 @@ function loadCategoryProducts() {
                     <div class="product-card">
 
 
-                        <div class="product-image">
+                        <a href="product.html?id=${product.id}" class="product-image">
 
                             ${saleBadge}
 
@@ -512,7 +586,7 @@ function loadCategoryProducts() {
 
                             >
 
-                        </div>
+                        </a>
 
 
                         <div class="product-info">
@@ -528,17 +602,25 @@ function loadCategoryProducts() {
                             ${priceHTML}
 
 
-                            <a
+                            <div class="card-qty">
+                                <button type="button" class="card-qty-minus">−</button>
+                                <input type="number" class="card-qty-input" value="1" min="1">
+                                <button type="button" class="card-qty-plus">+</button>
+                            </div>
 
-                                href="product.html?id=${product.id}"
+                            <button
 
-                                class="btn"
+                                class="btn add-to-cart-btn"
+
+                                data-id="${product.id}"
+
+                                type="button"
 
                             >
 
-                                View Details
+                                Add to Cart
 
-                            </a>
+                            </button>
 
 
                         </div>
@@ -557,6 +639,24 @@ function loadCategoryProducts() {
 
             container.innerHTML =
                 productsHTML;
+
+            wireCardQuantitySteppers(container);
+
+            container.querySelectorAll(".add-to-cart-btn").forEach(button => {
+                button.addEventListener("click", () => {
+                    const product = data.products.find(p => Number(p.id) === Number(button.dataset.id));
+                    if (!product) return;
+
+                    const qtyInput = button.closest(".product-info").querySelector(".card-qty-input");
+                    const quantity = Math.max(1, Number(qtyInput?.value) || 1);
+
+                    addProductToCart(product, quantity);
+
+                    const original = button.textContent;
+                    button.textContent = "Added ✓";
+                    setTimeout(() => { button.textContent = original; }, 1500);
+                });
+            });
 
 
             console.log(

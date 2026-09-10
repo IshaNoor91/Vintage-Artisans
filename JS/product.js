@@ -851,6 +851,22 @@ function addProductToCart(
 }
 
 
+// Wires the −/+ buttons on every card's quantity stepper (.card-qty) found
+// inside the given container — used by the Recommended/Related cards
+// below. Safe to call after each re-render.
+function wireCardQuantitySteppers(scope) {
+    scope.querySelectorAll(".card-qty").forEach(wrapper => {
+        const input = wrapper.querySelector(".card-qty-input");
+        wrapper.querySelector(".card-qty-minus")?.addEventListener("click", () => {
+            input.value = Math.max(1, (Number(input.value) || 1) - 1);
+        });
+        wrapper.querySelector(".card-qty-plus")?.addEventListener("click", () => {
+            input.value = (Number(input.value) || 1) + 1;
+        });
+    });
+}
+
+
 // ========================================
 // UPDATE CART COUNT
 // ========================================
@@ -1215,7 +1231,7 @@ function renderRelatedProducts(
 
                 <div class="product-card">
 
-                    <div class="product-image">
+                    <a href="product.html?id=${product.id}" class="product-image">
 
                         <img
                             src="${image}"
@@ -1223,7 +1239,7 @@ function renderRelatedProducts(
                             loading="lazy"
                         >
 
-                    </div>
+                    </a>
 
 
                     <div class="product-info">
@@ -1240,12 +1256,19 @@ function renderRelatedProducts(
                         </div>
 
 
-                        <a
-                            href="product.html?id=${product.id}"
-                            class="btn"
+                        <div class="card-qty">
+                            <button type="button" class="card-qty-minus">−</button>
+                            <input type="number" class="card-qty-input" value="1" min="1">
+                            <button type="button" class="card-qty-plus">+</button>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="btn add-to-cart-btn"
+                            data-id="${product.id}"
                         >
-                            View Details
-                        </a>
+                            Add to Cart
+                        </button>
 
                     </div>
 
@@ -1259,6 +1282,24 @@ function renderRelatedProducts(
 
     container.innerHTML =
         html;
+
+    wireCardQuantitySteppers(container);
+
+    container.querySelectorAll(".add-to-cart-btn").forEach(button => {
+        button.addEventListener("click", () => {
+            const product = products.find(p => Number(p.id) === Number(button.dataset.id));
+            if (!product) return;
+
+            const qtyInput = button.closest(".product-info").querySelector(".card-qty-input");
+            const quantity = Math.max(1, Number(qtyInput?.value) || 1);
+
+            addProductToCart(product, quantity);
+
+            const original = button.textContent;
+            button.textContent = "Added ✓";
+            setTimeout(() => { button.textContent = original; }, 1500);
+        });
+    });
 
 }
 
